@@ -8,9 +8,9 @@ API Flow:
 4. Parse transactions to detect recurring subscriptions
 
 Environments:
-- Sandbox: https://sandbox.codef.io
-- Development: https://development.codef.io
+- Demo: https://development.codef.io
 - Production: https://api.codef.io
+- Sandbox (fixed responses): https://sandbox.codef.io
 
 Token URL: https://oauth.codef.io/oauth/token
 """
@@ -60,11 +60,11 @@ class CodefClient:
         self,
         client_id: str | None = None,
         client_secret: str | None = None,
-        use_sandbox: bool = True,
+        use_demo: bool = True,
     ):
         self.client_id = client_id or settings.CODEF_CLIENT_ID
         self.client_secret = client_secret or settings.CODEF_CLIENT_SECRET
-        self.base_url = CODEF_SANDBOX_URL if use_sandbox else CODEF_PROD_URL
+        self.base_url = CODEF_DEV_URL if use_demo else CODEF_PROD_URL
         self._access_token: str | None = None
         self._token_expires_at: datetime | None = None
 
@@ -176,7 +176,7 @@ class CodefClient:
     ) -> dict:
         """Create a new connectedId by registering card credentials.
 
-        For sandbox: loginType=1 (ID/PW).
+        For demo: loginType=1 (ID/PW).
         For production with certificates: loginType=0 with derFile/keyFile.
         """
         account_item: dict[str, str] = {

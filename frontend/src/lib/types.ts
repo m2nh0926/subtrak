@@ -259,7 +259,7 @@ export interface CodefImportResponse {
 
 export interface CodefStatus {
   configured: boolean;
-  sandbox_mode: boolean;
+  demo_mode: boolean;
   base_url: string;
 }
 

@@ -44,7 +44,7 @@ async def get_codef_status():
     """Check if Codef API is configured and ready."""
     return CodefStatusResponse(
         configured=codef_client.is_configured,
-        sandbox_mode="sandbox" in codef_client.base_url,
+        demo_mode="development" in codef_client.base_url,
         base_url=codef_client.base_url,
     )
 

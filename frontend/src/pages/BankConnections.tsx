@@ -148,7 +148,7 @@ export default function BankConnections() {
                 <p className="text-sm font-medium">Codef API 연동 활성화</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   카드사 로그인 정보로 카드를 등록하면 구독 내역을 자동으로 불러올 수 있습니다.
-                  {codefStatus?.sandbox_mode && " (샌드박스 모드)"}
+                  {codefStatus?.demo_mode && " (데모 모드)"}
                 </p>
               </div>
             </div>

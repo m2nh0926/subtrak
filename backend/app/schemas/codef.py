@@ -78,5 +78,5 @@ class CodefStatusResponse(BaseModel):
     """Codef API status."""
 
     configured: bool
-    sandbox_mode: bool
+    demo_mode: bool
     base_url: str

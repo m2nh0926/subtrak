@@ -202,6 +202,9 @@ export interface BankConnection {
 export interface CodefCardOrg {
   code: string;
   name: string;
+  required_fields: string[];
+  optional_fields: string[];
+  notes: string;
 }
 
 export interface CodefRegisterCardRequest {
@@ -209,6 +212,8 @@ export interface CodefRegisterCardRequest {
   login_id: string;
   login_password: string;
   birthday?: string;
+  card_no?: string;
+  card_password?: string;
 }
 
 export interface CodefRegisterCardResponse {

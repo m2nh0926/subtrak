@@ -54,6 +54,66 @@ CARD_ORGS: dict[str, str] = {
 # Reverse mapping: name -> code
 CARD_ORG_BY_NAME: dict[str, str] = {v: k for k, v in CARD_ORGS.items()}
 
+# Per-card-company field config for ID/PW login
+# Based on: https://developer.codef.io/common-guide/connected-id/register
+CARD_FIELD_CONFIG: dict[str, dict] = {
+    "0301": {
+        "required": ["id", "password"],
+        "optional": ["birthDate", "cardNo", "cardPassword"],
+        "notes": "카드소지확인 인증 시 cardNo(전체), cardPassword(앞 2자리) 필요",
+    },
+    "0302": {
+        "required": ["id", "password", "cardNo", "cardPassword"],
+        "optional": ["birthDate"],
+        "notes": "cardNo(인증할 카드번호), cardPassword(비밀번호 4자리) 필수",
+    },
+    "0303": {
+        "required": ["id", "password"],
+        "optional": ["birthDate"],
+        "notes": "",
+    },
+    "0304": {
+        "required": ["id", "password"],
+        "optional": ["birthDate"],
+        "notes": "",
+    },
+    "0305": {
+        "required": ["id", "password"],
+        "optional": ["birthDate"],
+        "notes": "",
+    },
+    "0306": {
+        "required": ["id", "password"],
+        "optional": ["birthDate"],
+        "notes": "",
+    },
+    "0307": {
+        "required": ["id", "password"],
+        "optional": ["birthDate"],
+        "notes": "",
+    },
+    "0309": {
+        "required": ["id", "password"],
+        "optional": ["birthDate"],
+        "notes": "",
+    },
+    "0311": {
+        "required": ["id", "password"],
+        "optional": ["birthDate"],
+        "notes": "",
+    },
+    "0312": {
+        "required": ["id", "password"],
+        "optional": ["birthDate"],
+        "notes": "",
+    },
+    "0313": {
+        "required": ["id", "password"],
+        "optional": ["birthDate"],
+        "notes": "",
+    },
+}
+
 
 def rsa_encrypt(plaintext: str, public_key_str: str) -> str:
     """Encrypt plaintext using RSA public key (PKCS1v15 padding).
@@ -132,10 +192,16 @@ class CodefClient:
         """Make authenticated request to Codef API.
 
         All Codef requests: POST, body is JSON URL-encoded, Bearer token.
+        Matches official codef-python sample: urllib.parse.quote(json.dumps(body))
         """
         token = await self._get_token()
         url = f"{self.base_url}{path}"
-        encoded_body = urllib.parse.quote(json.dumps(body))
+        raw_json = json.dumps(body)
+        encoded_body = urllib.parse.quote(raw_json)
+
+        logger.info(f"Codef request URL: {url}")
+        logger.info(f"Codef request body (raw JSON): {raw_json}")
+        logger.info(f"Codef request body (encoded, first 200): {encoded_body[:200]}")
 
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
@@ -209,12 +275,10 @@ class CodefClient:
         user_password: str = "",
         client_type: str = "P",
         birthday: str = "",
+        card_no: str = "",
+        card_password: str = "",
     ) -> dict:
-        """Create a new connectedId by registering card credentials.
-
-        For demo: loginType=1 (ID/PW).
-        For production with certificates: loginType=0 with derFile/keyFile.
-        """
+        """Create a new connectedId by registering card credentials."""
         account_item: dict[str, str] = {
             "countryCode": "KR",
             "businessType": "CD",
@@ -223,16 +287,23 @@ class CodefClient:
             "loginType": login_type,
         }
 
+        public_key = settings.CODEF_PUBLIC_KEY
+        encrypted_pw = rsa_encrypt(user_password, public_key) if public_key else user_password
+        encrypted_card_pw = (
+            rsa_encrypt(card_password, public_key) if (public_key and card_password) else card_password
+        )
+
         if login_type == "1":
             account_item["id"] = user_id
-            # Codef requires password to be RSA-encrypted with publicKey
-            public_key = settings.CODEF_PUBLIC_KEY
-            if public_key:
-                account_item["password"] = rsa_encrypt(user_password, public_key)
-            else:
-                account_item["password"] = user_password
-            if birthday:
-                account_item["birthDate"] = birthday
+        account_item["password"] = encrypted_pw
+
+        # All optional fields as empty strings per Codef spec
+        account_item["birthDate"] = birthday or ""
+        account_item["cardNo"] = card_no or ""
+        account_item["cardPassword"] = encrypted_card_pw or ""
+        account_item["identity"] = ""
+        account_item["loginTypeLevel"] = ""
+        account_item["clientTypeLevel"] = ""
 
         body = {"accountList": [account_item]}
         result = await self._api_request("/v1/account/create", body)
@@ -247,6 +318,8 @@ class CodefClient:
         user_password: str = "",
         client_type: str = "P",
         birthday: str = "",
+        card_no: str = "",
+        card_password: str = "",
     ) -> dict:
         """Add a card to an existing connectedId."""
         account_item: dict[str, str] = {
@@ -257,15 +330,21 @@ class CodefClient:
             "loginType": login_type,
         }
 
+        public_key = settings.CODEF_PUBLIC_KEY
+        encrypted_pw = rsa_encrypt(user_password, public_key) if public_key else user_password
+        encrypted_card_pw = (
+            rsa_encrypt(card_password, public_key) if (public_key and card_password) else card_password
+        )
+
         if login_type == "1":
             account_item["id"] = user_id
-            public_key = settings.CODEF_PUBLIC_KEY
-            if public_key:
-                account_item["password"] = rsa_encrypt(user_password, public_key)
-            else:
-                account_item["password"] = user_password
-            if birthday:
-                account_item["birthDate"] = birthday
+        account_item["password"] = encrypted_pw
+        account_item["birthDate"] = birthday or ""
+        account_item["cardNo"] = card_no or ""
+        account_item["cardPassword"] = encrypted_card_pw or ""
+        account_item["identity"] = ""
+        account_item["loginTypeLevel"] = ""
+        account_item["clientTypeLevel"] = ""
 
         body = {"connectedId": connected_id, "accountList": [account_item]}
         result = await self._api_request("/v1/account/add", body)
@@ -357,6 +436,8 @@ class CodefClient:
         card_login_id: str,
         card_login_pw: str,
         birthday: str = "",
+        card_no: str = "",
+        card_password: str = "",
         existing_connected_id: str | None = None,
     ) -> str:
         """Register a card and return the connectedId."""
@@ -367,6 +448,8 @@ class CodefClient:
                 user_id=card_login_id,
                 user_password=card_login_pw,
                 birthday=birthday,
+                card_no=card_no,
+                card_password=card_password,
             )
             return data.get("connectedId", existing_connected_id)
         else:
@@ -375,6 +458,8 @@ class CodefClient:
                 user_id=card_login_id,
                 user_password=card_login_pw,
                 birthday=birthday,
+                card_no=card_no,
+                card_password=card_password,
             )
             return data.get("connectedId", "")
 

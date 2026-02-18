@@ -2,10 +2,13 @@ from pydantic import BaseModel
 
 
 class CodefCardOrg(BaseModel):
-    """Card company info."""
+    """Card company info with field requirements."""
 
     code: str
     name: str
+    required_fields: list[str] = ["id", "password"]
+    optional_fields: list[str] = ["birthDate"]
+    notes: str = ""
 
 
 class CodefRegisterCardRequest(BaseModel):
@@ -15,6 +18,8 @@ class CodefRegisterCardRequest(BaseModel):
     login_id: str  # Card company website login ID
     login_password: str  # Card company website login password
     birthday: str = ""  # YYMMDD (optional, for some card companies)
+    card_no: str = ""  # 현대카드 등 필수: 카드번호
+    card_password: str = ""  # 현대카드 등 필수: 카드 비밀번호 4자리
 
 
 class CodefRegisterCardResponse(BaseModel):

@@ -34,7 +34,7 @@ from app.schemas.codef import (
     DetectedSubscription,
 )
 from app.services.auth import get_current_user
-from app.services.codef import CARD_ORGS, codef_client
+from app.services.codef import CARD_FIELD_CONFIG, CARD_ORGS, codef_client
 
 router = APIRouter(prefix="/codef", tags=["codef"])
 
@@ -51,8 +51,20 @@ async def get_codef_status():
 
 @router.get("/card-companies", response_model=list[CodefCardOrg])
 async def list_card_companies():
-    """List supported card companies with their organization codes."""
-    return [CodefCardOrg(code=code, name=name) for code, name in CARD_ORGS.items()]
+    """List supported card companies with organization codes and field requirements."""
+    result = []
+    for code, name in CARD_ORGS.items():
+        config = CARD_FIELD_CONFIG.get(code, {})
+        result.append(
+            CodefCardOrg(
+                code=code,
+                name=name,
+                required_fields=config.get("required", ["id", "password"]),
+                optional_fields=config.get("optional", ["birthDate"]),
+                notes=config.get("notes", ""),
+            )
+        )
+    return result
 
 
 @router.post("/register-card", response_model=CodefRegisterCardResponse)
@@ -100,6 +112,8 @@ async def register_card(
             card_login_id=data.login_id,
             card_login_pw=data.login_password,
             birthday=data.birthday,
+            card_no=data.card_no,
+            card_password=data.card_password,
             existing_connected_id=existing_connected_id,
         )
     except Exception as e:

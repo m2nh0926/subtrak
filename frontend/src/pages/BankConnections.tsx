@@ -37,7 +37,16 @@ export default function BankConnections() {
   const [loginId, setLoginId] = useState("");
   const [loginPw, setLoginPw] = useState("");
   const [birthday, setBirthday] = useState("");
+  const [cardNo, setCardNo] = useState("");
+  const [cardPassword, setCardPassword] = useState("");
   const [registerError, setRegisterError] = useState("");
+
+  // Dynamic field config based on selected card company
+  const selectedOrgConfig = cardCompanies?.find((c) => c.code === selectedOrg);
+  const requiredFields = selectedOrgConfig?.required_fields ?? [];
+  const optionalFields = selectedOrgConfig?.optional_fields ?? [];
+  const allFields = [...requiredFields, ...optionalFields];
+  const orgNotes = selectedOrgConfig?.notes ?? "";
 
   // Detection dialog
   const [showDetect, setShowDetect] = useState(false);
@@ -69,11 +78,15 @@ export default function BankConnections() {
         login_id: loginId,
         login_password: loginPw,
         birthday: birthday || undefined,
+        card_no: cardNo || undefined,
+        card_password: cardPassword || undefined,
       });
       setSelectedOrg("");
       setLoginId("");
       setLoginPw("");
       setBirthday("");
+      setCardNo("");
+      setCardPassword("");
       setShowCodefRegister(false);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string } } };
@@ -288,6 +301,11 @@ export default function BankConnections() {
                 ))}
               </select>
             </div>
+            {orgNotes && (
+              <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 p-3 rounded-md">
+                ⚠ {orgNotes}
+              </div>
+            )}
             <div>
               <label className="text-sm font-medium">카드사 로그인 ID</label>
               <Input value={loginId} onChange={(e) => setLoginId(e.target.value)} placeholder="카드사 홈페이지 아이디" required />
@@ -296,15 +314,49 @@ export default function BankConnections() {
               <label className="text-sm font-medium">카드사 로그인 비밀번호</label>
               <Input type="password" value={loginPw} onChange={(e) => setLoginPw(e.target.value)} placeholder="카드사 홈페이지 비밀번호" required />
             </div>
+            {allFields.includes("cardNo") && (
+              <div>
+                <label className="text-sm font-medium">
+                  카드번호{requiredFields.includes("cardNo") && <span className="text-red-500 ml-1">*</span>}
+                </label>
+                <Input
+                  value={cardNo}
+                  onChange={(e) => setCardNo(e.target.value)}
+                  placeholder="카드번호 (숫자만 입력)"
+                  required={requiredFields.includes("cardNo")}
+                />
+              </div>
+            )}
+            {allFields.includes("cardPassword") && (
+              <div>
+                <label className="text-sm font-medium">
+                  카드 비밀번호{requiredFields.includes("cardPassword") && <span className="text-red-500 ml-1">*</span>}
+                </label>
+                <Input
+                  type="password"
+                  value={cardPassword}
+                  onChange={(e) => setCardPassword(e.target.value)}
+                  placeholder="카드 비밀번호 (숫자 4자리)"
+                  required={requiredFields.includes("cardPassword")}
+                />
+              </div>
+            )}
             <div>
-              <label className="text-sm font-medium">생년월일 (선택)</label>
-              <Input value={birthday} onChange={(e) => setBirthday(e.target.value)} placeholder="YYMMDD (예: 900101)" />
+              <label className="text-sm font-medium">
+                생년월일{requiredFields.includes("birthDate") ? <span className="text-red-500 ml-1">*</span> : " (선택)"}
+              </label>
+              <Input
+                value={birthday}
+                onChange={(e) => setBirthday(e.target.value)}
+                placeholder="YYMMDD (예: 900101)"
+                required={requiredFields.includes("birthDate")}
+              />
             </div>
             {registerError && (
               <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">{registerError}</div>
             )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => { setShowCodefRegister(false); setRegisterError(""); }}>취소</Button>
+              <Button type="button" variant="outline" onClick={() => { setShowCodefRegister(false); setRegisterError(""); setCardNo(""); setCardPassword(""); }}>취소</Button>
               <Button type="submit" disabled={registerCard.isPending}>
                 {registerCard.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 등록

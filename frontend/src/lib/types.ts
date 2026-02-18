@@ -1,0 +1,225 @@
+export interface Category {
+  id: number;
+  name: string;
+  color: string;
+  icon: string | null;
+  created_at: string;
+}
+
+export interface PaymentMethod {
+  id: number;
+  name: string;
+  card_last_four: string | null;
+  card_type: string;
+  expiry_date: string | null;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string | null;
+  subscription_count?: number;
+  total_monthly_cost?: number;
+}
+
+export interface Subscription {
+  id: number;
+  name: string;
+  amount: number;
+  currency: string;
+  billing_cycle: string;
+  billing_day: number | null;
+  next_payment_date: string;
+  category_id: number | null;
+  payment_method_id: number | null;
+  cancel_url: string | null;
+  cancel_method: string | null;
+  is_active: boolean;
+  auto_renew: boolean;
+  start_date: string;
+  logo_url: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string | null;
+  category_name?: string | null;
+  category_color?: string | null;
+  payment_method_name?: string | null;
+  payment_method_last_four?: string | null;
+}
+
+export interface CancellationLog {
+  id: number;
+  subscription_id: number;
+  cancelled_at: string;
+  reason: string | null;
+  savings_per_month: number | null;
+  subscription_name: string | null;
+}
+
+export interface UpcomingPayment {
+  subscription_name: string;
+  amount: number;
+  date: string;
+  days_until: number;
+}
+
+export interface CategorySpending {
+  category_name: string;
+  color: string;
+  total_amount: number;
+  percentage: number;
+}
+
+export interface CardSpending {
+  card_name: string;
+  card_last_four: string | null;
+  total_amount: number;
+  subscription_count: number;
+}
+
+export interface DashboardSummary {
+  total_monthly_cost: number;
+  total_yearly_cost: number;
+  active_count: number;
+  upcoming_payments: UpcomingPayment[];
+  category_breakdown: CategorySpending[];
+  card_breakdown: CardSpending[];
+  total_savings_from_cancellations: number;
+}
+
+export interface SavingsSummary {
+  total_monthly_savings: number;
+  total_cumulative_savings: number;
+  cancellation_count: number;
+}
+
+export interface SubscriptionCreate {
+  name: string;
+  amount: number;
+  currency: string;
+  billing_cycle: string;
+  billing_day?: number | null;
+  next_payment_date: string;
+  category_id?: number | null;
+  payment_method_id?: number | null;
+  cancel_url?: string | null;
+  cancel_method?: string | null;
+  start_date: string;
+  logo_url?: string | null;
+  notes?: string | null;
+}
+
+export interface PaymentMethodCreate {
+  name: string;
+  card_last_four?: string | null;
+  card_type: string;
+  expiry_date?: string | null;
+  notes?: string | null;
+}
+
+// Phase 2 types
+
+export interface PriceHistory {
+  id: number;
+  subscription_id: number;
+  old_amount: number;
+  new_amount: number;
+  old_currency: string;
+  new_currency: string;
+  changed_at: string;
+  notes: string | null;
+}
+
+export interface SubscriptionMember {
+  id: number;
+  subscription_id: number;
+  name: string;
+  email: string | null;
+  share_amount: number | null;
+  share_percentage: number | null;
+  is_owner: boolean;
+  created_at: string;
+}
+
+export interface SharingPlatform {
+  id: number;
+  name: string;
+  url: string | null;
+  logo_url: string | null;
+  description: string | null;
+  created_at: string;
+}
+
+export interface SharedSubscription {
+  id: number;
+  subscription_id: number;
+  platform_id: number;
+  user_id: number;
+  my_role: string;
+  monthly_share_cost: number;
+  total_members: number;
+  party_status: string;
+  deposit_paid: number | null;
+  platform_fee: number | null;
+  external_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string | null;
+  subscription_name?: string | null;
+  platform_name?: string | null;
+}
+
+export interface Organization {
+  id: number;
+  name: string;
+  owner_id: number;
+  created_at: string;
+  members?: OrgMember[];
+}
+
+export interface OrgMember {
+  id: number;
+  organization_id: number;
+  user_id: number;
+  user_name: string | null;
+  user_email: string | null;
+  role: string;
+  joined_at: string;
+}
+
+export interface BankConnection {
+  id: number;
+  user_id: number;
+  provider: string;
+  institution_name: string;
+  account_identifier: string | null;
+  status: string;
+  last_synced_at: string | null;
+  created_at: string;
+}
+
+export interface CalendarEvent {
+  subscription_id: number;
+  subscription_name: string;
+  amount: number;
+  currency: string;
+  date: string;
+  logo_url: string | null;
+}
+
+export interface CalendarMonth {
+  year: number;
+  month: number;
+  events: CalendarEvent[];
+  total_amount: number;
+}
+
+export interface ImportResult {
+  total_rows: number;
+  imported: number;
+  skipped: number;
+  errors: string[];
+}
+
+export interface LogoSearchResult {
+  logo_url: string;
+  source: string;
+}

@@ -61,7 +61,7 @@ def rsa_encrypt(plaintext: str, public_key_str: str) -> str:
     Codef requires password fields to be RSA-encrypted with the issued publicKey.
     The publicKey from Codef is a base64-encoded DER SubjectPublicKeyInfo (X.509).
     """
-    der_bytes = base64.b64decode(public_key_str)
+    der_bytes = base64.b64decode(public_key_str.strip())
     public_key = serialization.load_der_public_key(der_bytes)
     encrypted = public_key.encrypt(  # type: ignore[union-attr]
         plaintext.encode("utf-8"),
@@ -173,8 +173,27 @@ class CodefClient:
         if result_code != "CF-00000":
             msg = result.get("result", {}).get("message", "알 수 없는 오류")
             extra = result.get("result", {}).get("extraMessage", "")
-            logger.error(f"Codef API business error: {result_code} - {msg} {extra}")
-            raise Exception(f"Codef 오류 [{result_code}]: {msg} {extra}")
+
+            # CF-04000 is a wrapper — real error is in data.errorList
+            error_detail = ""
+            data = result.get("data", {})
+            if isinstance(data, dict):
+                error_list = data.get("errorList", [])
+                if error_list:
+                    for err in error_list:
+                        err_code = err.get("code", "")
+                        err_msg = err.get("message", "")
+                        error_detail += f" [{err_code}] {err_msg}"
+                    logger.error(f"Codef errorList: {error_list}")
+
+            logger.error(
+                f"Codef API business error: {result_code} - {msg} {extra}"
+                f" | errorList detail:{error_detail or ' (none)'}"
+            )
+            full_msg = f"Codef 오류 [{result_code}]: {msg} {extra}"
+            if error_detail:
+                full_msg += f" (상세:{error_detail})"
+            raise Exception(full_msg)
 
         return result
 

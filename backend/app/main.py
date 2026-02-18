@@ -18,6 +18,7 @@ from app.routers import (
     calendar_view,
     cancellation_logs,
     categories,
+    codef,
     dashboard,
     data_export,
     logo,
@@ -50,6 +51,8 @@ async def lifespan(app: FastAPI):
         migrations = [
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE",
             "UPDATE users SET is_admin = TRUE WHERE email = 'admin@admin.com'",
+            "ALTER TABLE bank_connections ADD COLUMN IF NOT EXISTS organization_code VARCHAR(10)",
+            "ALTER TABLE bank_connections ADD COLUMN IF NOT EXISTS connected_id VARCHAR(100)",
         ]
         for sql in migrations:
             try:
@@ -92,6 +95,9 @@ app.include_router(payment_methods.router, prefix="/api/v1")
 app.include_router(categories.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
 app.include_router(cancellation_logs.router, prefix="/api/v1")
+
+# Codef integration
+app.include_router(codef.router, prefix="/api/v1")
 
 # Phase 2: New routers
 app.include_router(price_history.router, prefix="/api/v1")

@@ -13,6 +13,8 @@ class BankConnection(Base):
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     provider: Mapped[str] = mapped_column(String(30), default="codef")  # codef | manual
     institution_name: Mapped[str] = mapped_column(String(100), nullable=False)  # 신한카드, KB국민카드, etc.
+    organization_code: Mapped[str | None] = mapped_column(String(10), nullable=True)  # Codef org code e.g. "0306"
+    connected_id: Mapped[str | None] = mapped_column(String(100), nullable=True)  # Codef connectedId
     account_identifier: Mapped[str | None] = mapped_column(String(50), nullable=True)  # masked account/card number
     access_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="connected")  # connected | disconnected | error

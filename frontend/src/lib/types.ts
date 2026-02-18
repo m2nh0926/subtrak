@@ -190,10 +190,77 @@ export interface BankConnection {
   user_id: number;
   provider: string;
   institution_name: string;
+  organization_code: string | null;
+  connected_id: string | null;
   account_identifier: string | null;
   status: string;
   last_synced_at: string | null;
   created_at: string;
+}
+
+// Codef types
+export interface CodefCardOrg {
+  code: string;
+  name: string;
+}
+
+export interface CodefRegisterCardRequest {
+  organization_code: string;
+  login_id: string;
+  login_password: string;
+  birthday?: string;
+}
+
+export interface CodefRegisterCardResponse {
+  connected_id: string;
+  bank_connection_id: number;
+  organization_code: string;
+  organization_name: string;
+  message: string;
+}
+
+export interface CodefTransaction {
+  date: string;
+  time: string;
+  merchant: string;
+  amount: string;
+  status: string;
+  card_name: string;
+  card_no: string;
+  category: string;
+}
+
+export interface CodefScrapeResponse {
+  transactions: CodefTransaction[];
+  total_count: number;
+}
+
+export interface DetectedSubscription {
+  name: string;
+  amount: number;
+  billing_cycle: string;
+  billing_day: number;
+  occurrence_count: number;
+  last_payment_date: string;
+  card_no: string;
+  category: string;
+}
+
+export interface CodefDetectResponse {
+  detected: DetectedSubscription[];
+  total_transactions_analyzed: number;
+}
+
+export interface CodefImportResponse {
+  imported: number;
+  skipped: number;
+  details: string[];
+}
+
+export interface CodefStatus {
+  configured: boolean;
+  sandbox_mode: boolean;
+  base_url: string;
 }
 
 export interface CalendarEvent {

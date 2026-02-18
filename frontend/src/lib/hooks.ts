@@ -6,6 +6,8 @@ import type {
   PriceHistory, SubscriptionMember, SharingPlatform, SharedSubscription,
   Organization, BankConnection, CalendarMonth, ImportResult, LogoSearchResult,
   AdminDashboard,
+  CodefCardOrg, CodefRegisterCardRequest, CodefRegisterCardResponse,
+  CodefScrapeResponse, CodefDetectResponse, CodefImportResponse, CodefStatus,
 } from "./types";
 
 // Subscriptions
@@ -316,5 +318,58 @@ export function useAdminDashboard() {
   return useQuery<AdminDashboard>({
     queryKey: ["adminDashboard"],
     queryFn: () => api.get("/admin/dashboard").then((r) => r.data),
+  });
+}
+
+// Codef
+export function useCodefStatus() {
+  return useQuery<CodefStatus>({
+    queryKey: ["codefStatus"],
+    queryFn: () => api.get("/codef/status").then((r) => r.data),
+  });
+}
+
+export function useCodefCardCompanies() {
+  return useQuery<CodefCardOrg[]>({
+    queryKey: ["codefCardCompanies"],
+    queryFn: () => api.get("/codef/card-companies").then((r) => r.data),
+  });
+}
+
+export function useCodefRegisterCard() {
+  const qc = useQueryClient();
+  return useMutation<CodefRegisterCardResponse, Error, CodefRegisterCardRequest>({
+    mutationFn: (data) => api.post("/codef/register-card", data).then((r) => r.data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["bankConnections"] }); },
+  });
+}
+
+export function useCodefScrape() {
+  return useMutation<CodefScrapeResponse, Error, { bank_connection_id: number; months_back?: number }>({
+    mutationFn: (data) => api.post("/codef/scrape", data).then((r) => r.data),
+  });
+}
+
+export function useCodefDetect() {
+  const qc = useQueryClient();
+  return useMutation<CodefDetectResponse, Error, { bank_connection_id: number; months_back?: number }>({
+    mutationFn: (data) => api.post("/codef/detect", data).then((r) => r.data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["bankConnections"] }); },
+  });
+}
+
+export function useCodefImport() {
+  const qc = useQueryClient();
+  return useMutation<CodefImportResponse, Error, { bank_connection_id: number; subscriptions: { name: string; amount: number; billing_cycle: string; billing_day: number }[] }>({
+    mutationFn: (data) => api.post("/codef/import", data).then((r) => r.data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["subscriptions"] }); qc.invalidateQueries({ queryKey: ["dashboard"] }); qc.invalidateQueries({ queryKey: ["bankConnections"] }); },
+  });
+}
+
+export function useCodefDeleteConnection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.delete(`/codef/connection/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["bankConnections"] }),
   });
 }

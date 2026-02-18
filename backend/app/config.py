@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     # Codef
     CODEF_CLIENT_ID: str = ""
     CODEF_CLIENT_SECRET: str = ""
+    CODEF_PUBLIC_KEY: str = ""
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

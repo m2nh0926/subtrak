@@ -23,6 +23,8 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 import httpx
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
 
 from app.config import settings
 
@@ -51,6 +53,21 @@ CARD_ORGS: dict[str, str] = {
 
 # Reverse mapping: name -> code
 CARD_ORG_BY_NAME: dict[str, str] = {v: k for k, v in CARD_ORGS.items()}
+
+
+def rsa_encrypt(plaintext: str, public_key_str: str) -> str:
+    """Encrypt plaintext using RSA public key (PKCS1v15 padding).
+
+    Codef requires password fields to be RSA-encrypted with the issued publicKey.
+    The publicKey from Codef is a base64-encoded DER SubjectPublicKeyInfo (X.509).
+    """
+    der_bytes = base64.b64decode(public_key_str)
+    public_key = serialization.load_der_public_key(der_bytes)
+    encrypted = public_key.encrypt(  # type: ignore[union-attr]
+        plaintext.encode("utf-8"),
+        asym_padding.PKCS1v15(),
+    )
+    return base64.b64encode(encrypted).decode("utf-8")
 
 
 class CodefClient:
@@ -189,9 +206,14 @@ class CodefClient:
 
         if login_type == "1":
             account_item["id"] = user_id
-            account_item["password"] = user_password
+            # Codef requires password to be RSA-encrypted with publicKey
+            public_key = settings.CODEF_PUBLIC_KEY
+            if public_key:
+                account_item["password"] = rsa_encrypt(user_password, public_key)
+            else:
+                account_item["password"] = user_password
             if birthday:
-                account_item["birthday"] = birthday
+                account_item["birthDate"] = birthday
 
         body = {"accountList": [account_item]}
         result = await self._api_request("/v1/account/create", body)
@@ -218,9 +240,13 @@ class CodefClient:
 
         if login_type == "1":
             account_item["id"] = user_id
-            account_item["password"] = user_password
+            public_key = settings.CODEF_PUBLIC_KEY
+            if public_key:
+                account_item["password"] = rsa_encrypt(user_password, public_key)
+            else:
+                account_item["password"] = user_password
             if birthday:
-                account_item["birthday"] = birthday
+                account_item["birthDate"] = birthday
 
         body = {"connectedId": connected_id, "accountList": [account_item]}
         result = await self._api_request("/v1/account/add", body)

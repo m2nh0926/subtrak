@@ -45,6 +45,16 @@ async def run_scheduled_tasks() -> None:
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Add missing columns to existing tables (safe: IF NOT EXISTS)
+        from sqlalchemy import text
+        migrations = [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE",
+        ]
+        for sql in migrations:
+            try:
+                await conn.execute(text(sql))
+            except Exception:
+                pass
 
     scheduler.add_job(run_scheduled_tasks, "cron", hour=9, minute=0)
     scheduler.start()

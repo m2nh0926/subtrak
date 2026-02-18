@@ -1,8 +1,13 @@
+import logging
+import traceback
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
 
 from app.config import settings
 from app.db import Base, async_session, engine
@@ -83,6 +88,12 @@ app.include_router(bank_connections.router, prefix="/api/v1")
 app.include_router(data_export.router, prefix="/api/v1")
 app.include_router(logo.router, prefix="/api/v1")
 app.include_router(calendar_view.router, prefix="/api/v1")
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled error: {exc}\n{traceback.format_exc()}")
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 
 @app.get("/health")

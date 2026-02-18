@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     APP_NAME: str = "SubTrak"
     DEBUG: bool = True
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/subtrak"
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/subtrak"
     DISCORD_WEBHOOK_URL: str = ""
 
     # JWT

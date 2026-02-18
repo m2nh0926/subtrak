@@ -49,6 +49,7 @@ async def lifespan(app: FastAPI):
         from sqlalchemy import text
         migrations = [
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE",
+            "UPDATE users SET is_admin = TRUE WHERE email = 'admin@admin.com'",
         ]
         for sql in migrations:
             try:

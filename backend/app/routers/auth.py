@@ -7,6 +7,7 @@ from app.config import settings
 from app.db import get_db
 from app.models.user import User
 from app.schemas.user import (
+    AdminBootstrap,
     TokenRefresh,
     TokenResponse,
     UserLogin,
@@ -82,6 +83,21 @@ async def refresh_token(data: TokenRefresh, db: AsyncSession = Depends(get_db)):
         access_token=create_access_token({"sub": str(user.id)}),
         refresh_token=create_refresh_token({"sub": str(user.id)}),
     )
+
+
+@router.post("/bootstrap-admin")
+async def bootstrap_admin(
+    data: AdminBootstrap,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """로그인한 유저를 JWT_SECRET_KEY로 인증하여 관리자로 승격합니다."""
+    if data.secret_key != settings.JWT_SECRET_KEY:
+        raise HTTPException(status_code=403, detail="시크릿 키가 올바르지 않습니다")
+    current_user.is_admin = True
+    await db.flush()
+    await db.refresh(current_user)
+    return {"message": f"{current_user.email}이(가) 관리자로 승격되었습니다"}
 
 
 @router.get("/me", response_model=UserResponse)

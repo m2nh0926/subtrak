@@ -223,3 +223,52 @@ export interface LogoSearchResult {
   logo_url: string;
   source: string;
 }
+
+// Admin types
+export interface AdminUserSummary {
+  total_users: number;
+  active_users: number;
+  new_users_this_month: number;
+}
+
+export interface AdminSubscriptionStats {
+  total_subscriptions: number;
+  active_subscriptions: number;
+  total_monthly_revenue: number;
+  avg_monthly_per_user: number;
+}
+
+export interface AdminTopService {
+  name: string;
+  count: number;
+  total_monthly_amount: number;
+}
+
+export interface AdminTopCard {
+  card_type: string;
+  count: number;
+  total_monthly_amount: number;
+}
+
+export interface AdminCategoryStats {
+  category_name: string;
+  subscription_count: number;
+  total_monthly_amount: number;
+}
+
+export interface AdminRecentUser {
+  id: number;
+  name: string;
+  email: string;
+  created_at: string;
+  subscription_count: number;
+}
+
+export interface AdminDashboard {
+  user_summary: AdminUserSummary;
+  subscription_stats: AdminSubscriptionStats;
+  top_services: AdminTopService[];
+  top_cards: AdminTopCard[];
+  category_stats: AdminCategoryStats[];
+  recent_users: AdminRecentUser[];
+}

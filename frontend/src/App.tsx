@@ -16,6 +16,7 @@ import Calendar from "./pages/Calendar";
 import SharingPlatforms from "./pages/SharingPlatforms";
 import Organizations from "./pages/Organizations";
 import BankConnections from "./pages/BankConnections";
+import AdminDashboard from "./pages/AdminDashboard";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -32,6 +33,14 @@ function GuestOnly({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   if (isLoading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">로딩 중...</div>;
   if (isAuthenticated) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+function AdminGuard({ children }: { children: React.ReactNode }) {
+  const { user, isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">로딩 중...</div>;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!user?.is_admin) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -60,6 +69,11 @@ export default function App() {
               <Route path="/sharing" element={<SharingPlatforms />} />
               <Route path="/organizations" element={<Organizations />} />
               <Route path="/bank-connections" element={<BankConnections />} />
+            </Route>
+
+            {/* Admin routes */}
+            <Route element={<AdminGuard><AppLayout /></AdminGuard>}>
+              <Route path="/admin" element={<AdminDashboard />} />
             </Route>
           </Routes>
         </BrowserRouter>

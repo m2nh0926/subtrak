@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 from app.config import settings
 from app.db import Base, async_session, engine
 from app.routers import (
+    admin,
     auth,
     bank_connections,
     calendar_view,
@@ -67,6 +68,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Admin
+app.include_router(admin.router, prefix="/api/v1")
 
 # Auth (no prefix needed, router already has /auth)
 app.include_router(auth.router, prefix="/api/v1")

@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { LayoutDashboard, Repeat, CreditCard, XCircle, CalendarDays, Share2, Users, Building2, LogOut } from "lucide-react";
+import { LayoutDashboard, Repeat, CreditCard, XCircle, CalendarDays, Share2, Users, Building2, LogOut, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,20 @@ export function AppLayout() {
             </Link>
           ))}
         </nav>
+        {user?.is_admin && (
+          <Link
+            to="/admin"
+            className={cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors mt-2 border-t pt-3",
+              isActive("/admin")
+                ? "bg-yellow-500 text-white"
+                : "text-yellow-600 hover:bg-yellow-50"
+            )}
+          >
+            <Crown className="h-5 w-5" />
+            관리자
+          </Link>
+        )}
         <Button variant="ghost" size="sm" onClick={logout} className="mt-4 justify-start text-muted-foreground">
           <LogOut className="mr-2 h-4 w-4" />로그아웃
         </Button>

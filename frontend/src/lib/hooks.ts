@@ -5,6 +5,7 @@ import type {
   Category, DashboardSummary, CancellationLog, SavingsSummary,
   PriceHistory, SubscriptionMember, SharingPlatform, SharedSubscription,
   Organization, BankConnection, CalendarMonth, ImportResult, LogoSearchResult,
+  AdminDashboard,
 } from "./types";
 
 // Subscriptions
@@ -307,5 +308,13 @@ export function useLogoSearch(name: string) {
     queryKey: ["logo", name],
     queryFn: () => api.get("/logo/search", { params: { name } }).then((r) => r.data),
     enabled: name.length >= 2,
+  });
+}
+
+// Admin
+export function useAdminDashboard() {
+  return useQuery<AdminDashboard>({
+    queryKey: ["adminDashboard"],
+    queryFn: () => api.get("/admin/dashboard").then((r) => r.data),
   });
 }

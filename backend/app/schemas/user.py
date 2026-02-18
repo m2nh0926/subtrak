@@ -24,6 +24,7 @@ class UserResponse(BaseModel):
     email: str
     name: str
     is_active: bool
+    is_admin: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -37,3 +38,7 @@ class TokenResponse(BaseModel):
 
 class TokenRefresh(BaseModel):
     refresh_token: str
+
+
+class AdminBootstrap(BaseModel):
+    secret_key: str

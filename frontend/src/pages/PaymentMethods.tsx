@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/EmptyState";
 import {
   usePaymentMethods,
@@ -233,7 +233,10 @@ export default function PaymentMethods() {
 
       <Dialog open={showCodefRegister} onOpenChange={setShowCodefRegister}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Codef 카드 등록</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Codef 카드 등록</DialogTitle>
+            <DialogDescription>카드사 로그인 정보로 카드를 등록합니다.</DialogDescription>
+          </DialogHeader>
           <form onSubmit={handleCodefRegister} className="space-y-4">
             <div>
               <label className="text-sm font-medium">카드사 선택</label>
@@ -316,7 +319,10 @@ export default function PaymentMethods() {
 
       <Dialog open={showDetect} onOpenChange={(open) => { if (!open) setShowDetect(false); }}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>구독 탐색 결과</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>구독 탐색 결과</DialogTitle>
+            <DialogDescription>카드 사용 내역에서 반복 결제 패턴을 탐색합니다.</DialogDescription>
+          </DialogHeader>
 
           {detectSubs.isPending && (
             <div className="py-12 text-center">

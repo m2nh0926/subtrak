@@ -1,15 +1,13 @@
 import axios from "axios";
 
-function resolveBaseURL(): string {
-  const url = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
-  if (typeof window !== "undefined" && window.location.protocol === "https:" && url.startsWith("http://")) {
-    return url.replace("http://", "https://");
-  }
-  return url;
-}
+const API_URL = import.meta.env.VITE_API_URL || (
+  import.meta.env.PROD
+    ? "https://subtrak-production.up.railway.app/api/v1"
+    : "http://localhost:8000/api/v1"
+);
 
 const api = axios.create({
-  baseURL: resolveBaseURL(),
+  baseURL: API_URL,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -32,7 +30,7 @@ api.interceptors.response.use(
       const refreshToken = localStorage.getItem("refresh_token");
       if (refreshToken) {
         try {
-          const baseURL = resolveBaseURL();
+          const baseURL = API_URL;
           const res = await axios.post(`${baseURL}/auth/refresh`, {
             refresh_token: refreshToken,
           });

@@ -109,6 +109,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
+# Railway 등 리버스 프록시 뒤에서 X-Forwarded-Proto 헤더를 신뢰하도록 설정
+# 이게 없으면 trailing slash 리다이렉트가 http:// 로 나가서 Mixed Content 에러 발생
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[

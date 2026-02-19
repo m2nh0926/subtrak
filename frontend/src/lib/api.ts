@@ -1,7 +1,15 @@
 import axios from "axios";
 
+function resolveBaseURL(): string {
+  const url = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+  if (typeof window !== "undefined" && window.location.protocol === "https:" && url.startsWith("http://")) {
+    return url.replace("http://", "https://");
+  }
+  return url;
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1",
+  baseURL: resolveBaseURL(),
   headers: { "Content-Type": "application/json" },
 });
 
@@ -24,7 +32,7 @@ api.interceptors.response.use(
       const refreshToken = localStorage.getItem("refresh_token");
       if (refreshToken) {
         try {
-          const baseURL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+          const baseURL = resolveBaseURL();
           const res = await axios.post(`${baseURL}/auth/refresh`, {
             refresh_token: refreshToken,
           });

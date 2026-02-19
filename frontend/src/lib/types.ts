@@ -18,6 +18,9 @@ export interface PaymentMethod {
   updated_at: string | null;
   subscription_count?: number;
   total_monthly_cost?: number;
+  bank_connection_id: number | null;
+  bank_connection_status: string | null;
+  bank_connection_last_synced_at: string | null;
 }
 
 export interface Subscription {

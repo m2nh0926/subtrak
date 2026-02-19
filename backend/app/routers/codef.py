@@ -119,7 +119,6 @@ async def register_card(
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
-    # Create bank connection record
     conn = BankConnection(
         user_id=current_user.id,
         provider="codef",
@@ -131,6 +130,23 @@ async def register_card(
     db.add(conn)
     await db.flush()
     await db.refresh(conn)
+
+    pm_result = await db.execute(
+        select(PaymentMethod).where(
+            PaymentMethod.user_id == current_user.id,
+            PaymentMethod.bank_connection_id == conn.id,
+        )
+    )
+    if not pm_result.scalar_one_or_none():
+        pm = PaymentMethod(
+            user_id=current_user.id,
+            name=org_name,
+            card_type="credit",
+            is_active=True,
+            bank_connection_id=conn.id,
+        )
+        db.add(pm)
+        await db.flush()
 
     return CodefRegisterCardResponse(
         connected_id=connected_id,
@@ -340,7 +356,9 @@ async def import_detected_subscriptions(
         )
         db.add(subscription)
         imported += 1
-        details.append(f"'{sub_item.name}' - ₩{sub_item.amount:,} ({sub_item.billing_cycle})")
+        details.append(
+            f"'{sub_item.name}' - ₩{sub_item.amount:,} ({sub_item.billing_cycle})"
+        )
 
     await db.flush()
 

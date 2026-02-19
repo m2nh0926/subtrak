@@ -340,7 +340,7 @@ export function useCodefRegisterCard() {
   const qc = useQueryClient();
   return useMutation<CodefRegisterCardResponse, Error, CodefRegisterCardRequest>({
     mutationFn: (data) => api.post("/codef/register-card", data).then((r) => r.data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["bankConnections"] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["bankConnections"] }); qc.invalidateQueries({ queryKey: ["paymentMethods"] }); },
   });
 }
 
@@ -354,7 +354,7 @@ export function useCodefDetect() {
   const qc = useQueryClient();
   return useMutation<CodefDetectResponse, Error, { bank_connection_id: number; months_back?: number }>({
     mutationFn: (data) => api.post("/codef/detect", data).then((r) => r.data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["bankConnections"] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["bankConnections"] }); qc.invalidateQueries({ queryKey: ["paymentMethods"] }); },
   });
 }
 
@@ -362,7 +362,7 @@ export function useCodefImport() {
   const qc = useQueryClient();
   return useMutation<CodefImportResponse, Error, { bank_connection_id: number; subscriptions: { name: string; amount: number; billing_cycle: string; billing_day: number }[] }>({
     mutationFn: (data) => api.post("/codef/import", data).then((r) => r.data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["subscriptions"] }); qc.invalidateQueries({ queryKey: ["dashboard"] }); qc.invalidateQueries({ queryKey: ["bankConnections"] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["subscriptions"] }); qc.invalidateQueries({ queryKey: ["dashboard"] }); qc.invalidateQueries({ queryKey: ["bankConnections"] }); qc.invalidateQueries({ queryKey: ["paymentMethods"] }); },
   });
 }
 
@@ -370,6 +370,6 @@ export function useCodefDeleteConnection() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => api.delete(`/codef/connection/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["bankConnections"] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["bankConnections"] }); qc.invalidateQueries({ queryKey: ["paymentMethods"] }); },
   });
 }

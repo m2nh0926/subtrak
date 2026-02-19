@@ -15,7 +15,6 @@ import Signup from "./pages/Signup";
 import Calendar from "./pages/Calendar";
 import SharingPlatforms from "./pages/SharingPlatforms";
 import Organizations from "./pages/Organizations";
-import BankConnections from "./pages/BankConnections";
 import AdminDashboard from "./pages/AdminDashboard";
 
 const queryClient = new QueryClient({
@@ -68,7 +67,6 @@ export default function App() {
               <Route path="/calendar" element={<Calendar />} />
               <Route path="/sharing" element={<SharingPlatforms />} />
               <Route path="/organizations" element={<Organizations />} />
-              <Route path="/bank-connections" element={<BankConnections />} />
             </Route>
 
             {/* Admin routes */}

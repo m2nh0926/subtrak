@@ -28,6 +28,9 @@ class PaymentMethodUpdate(BaseModel):
 
 class PaymentMethodResponse(PaymentMethodBase):
     id: int
+    bank_connection_id: int | None = None
+    bank_connection_status: str | None = None
+    bank_connection_last_synced_at: datetime | None = None
     created_at: datetime
     updated_at: datetime | None = None
 

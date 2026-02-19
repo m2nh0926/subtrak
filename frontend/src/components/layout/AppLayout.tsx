@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { LayoutDashboard, Repeat, CreditCard, XCircle, CalendarDays, Share2, Users, Building2, LogOut, Crown } from "lucide-react";
+import { LayoutDashboard, Repeat, CreditCard, XCircle, CalendarDays, Share2, Users, LogOut, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,6 @@ const navItems = [
   { to: "/calendar", label: "캘린더", icon: CalendarDays },
   { to: "/sharing", label: "구독 공유", icon: Share2 },
   { to: "/organizations", label: "조직 관리", icon: Users },
-  { to: "/bank-connections", label: "은행 연동", icon: Building2 },
   { to: "/cancellations", label: "해지 내역", icon: XCircle },
 ];
 

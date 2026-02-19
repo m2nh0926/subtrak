@@ -9,6 +9,8 @@ from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
+from sqlalchemy import select
+
 from app.config import settings
 from app.db import Base, async_session, engine
 from app.routers import (
@@ -30,7 +32,11 @@ from app.routers import (
     subscription_members,
     subscriptions,
 )
-from app.services.scheduler import check_expiring_cards, check_upcoming_payments, update_next_payment_dates
+from app.services.scheduler import (
+    check_expiring_cards,
+    check_upcoming_payments,
+    update_next_payment_dates,
+)
 
 scheduler = AsyncIOScheduler()
 
@@ -46,19 +52,52 @@ async def run_scheduled_tasks() -> None:
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Add missing columns to existing tables (safe: IF NOT EXISTS)
         from sqlalchemy import text
+
         migrations = [
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE",
             "UPDATE users SET is_admin = TRUE WHERE email = 'admin@admin.com'",
             "ALTER TABLE bank_connections ADD COLUMN IF NOT EXISTS organization_code VARCHAR(10)",
             "ALTER TABLE bank_connections ADD COLUMN IF NOT EXISTS connected_id VARCHAR(100)",
+            "ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS bank_connection_id INTEGER REFERENCES bank_connections(id) ON DELETE SET NULL",
         ]
         for sql in migrations:
             try:
                 await conn.execute(text(sql))
             except Exception:
                 pass
+
+    # 기존 Codef BankConnection 중 PaymentMethod가 없는 것들 자동 생성
+    async with async_session() as session:
+        try:
+            from app.models.bank_connection import BankConnection
+            from app.models.payment_method import PaymentMethod
+
+            result = await session.execute(
+                select(BankConnection).where(
+                    BankConnection.provider == "codef",
+                    BankConnection.status == "connected",
+                )
+            )
+            connections = result.scalars().all()
+            for bc in connections:
+                existing = await session.execute(
+                    select(PaymentMethod).where(
+                        PaymentMethod.bank_connection_id == bc.id
+                    )
+                )
+                if not existing.scalar_one_or_none():
+                    pm = PaymentMethod(
+                        user_id=bc.user_id,
+                        name=bc.institution_name,
+                        card_type="credit",
+                        is_active=True,
+                        bank_connection_id=bc.id,
+                    )
+                    session.add(pm)
+            await session.commit()
+        except Exception:
+            await session.rollback()
 
     scheduler.add_job(run_scheduled_tasks, "cron", hour=9, minute=0)
     scheduler.start()

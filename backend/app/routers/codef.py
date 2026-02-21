@@ -161,16 +161,48 @@ async def register_bank(
             connected_id=connected_id,
             organization=data.organization_code,
         )
-        raw_accounts = acct_data.get("resList", acct_data.get("resAccountList", []))
-        for acct in raw_accounts:
+        import logging as _log
+
+        _log.getLogger(__name__).info(
+            f"Bank account-list raw keys: {list(acct_data.keys()) if isinstance(acct_data, dict) else type(acct_data)}"
+        )
+
+        # Codef 보유계좌 응답: 계좌 종류별 분리 배열
+        # resDepositTrust(예금/신탁), resLoan(대출), resFund(펀드),
+        # resForeignCurrency(외화), resInsurance(보험)
+        account_type_keys = [
+            "resDepositTrust",
+            "resLoan",
+            "resFund",
+            "resForeignCurrency",
+            "resInsurance",
+        ]
+        all_raw_accounts: list[dict] = []
+        for key in account_type_keys:
+            items = acct_data.get(key, [])
+            if isinstance(items, list):
+                all_raw_accounts.extend(items)
+
+        if not all_raw_accounts:
+            all_raw_accounts = acct_data.get(
+                "resList", acct_data.get("resAccountList", [])
+            )
+
+        _log.getLogger(__name__).info(
+            f"Bank account-list found {len(all_raw_accounts)} accounts"
+        )
+
+        for acct in all_raw_accounts:
             acct_no = acct.get("resAccount", acct.get("resAccountNo", ""))
             acct_name = acct.get("resAccountName", acct.get("resAccountNickName", ""))
             if acct_no:
                 discovered_accounts.append(
                     {"account_no": acct_no, "account_name": acct_name}
                 )
-    except Exception:
-        pass
+    except Exception as e:
+        import logging as _log
+
+        _log.getLogger(__name__).warning(f"Bank account-list failed: {e}")
 
     if discovered_accounts:
         for acct_info in discovered_accounts:
@@ -364,6 +396,8 @@ async def register_card(
 async def _get_conn_and_identifiers(
     db: AsyncSession, bank_connection_id: int, user_id: int
 ) -> tuple["BankConnection", list[str]]:
+    import logging as _log
+
     result = await db.execute(
         select(BankConnection).where(
             BankConnection.id == bank_connection_id,
@@ -388,6 +422,62 @@ async def _get_conn_and_identifiers(
 
     if not identifiers and conn.card_no:
         identifiers = [conn.card_no]
+
+    if not identifiers and conn.business_type == "BK" and conn.connected_id:
+        _log.getLogger(__name__).info(
+            "BK connection has no account identifiers — re-fetching account-list"
+        )
+        try:
+            acct_data = await codef_client.get_bank_account_list(
+                connected_id=conn.connected_id,
+                organization=conn.organization_code,
+            )
+            account_type_keys = [
+                "resDepositTrust",
+                "resLoan",
+                "resFund",
+                "resForeignCurrency",
+                "resInsurance",
+            ]
+            for key in account_type_keys:
+                items = acct_data.get(key, [])
+                if isinstance(items, list):
+                    for acct in items:
+                        acct_no = acct.get("resAccount", acct.get("resAccountNo", ""))
+                        if acct_no and acct_no not in identifiers:
+                            identifiers.append(acct_no)
+                            acct_name = acct.get(
+                                "resAccountName",
+                                acct.get("resAccountNickName", ""),
+                            )
+                            last_four = acct_no[-4:] if len(acct_no) >= 4 else acct_no
+                            pm = PaymentMethod(
+                                user_id=conn.user_id,
+                                name=acct_name or conn.institution_name,
+                                card_no=acct_no,
+                                card_last_four=last_four,
+                                card_type="bank_transfer",
+                                is_active=True,
+                                bank_connection_id=conn.id,
+                            )
+                            db.add(pm)
+
+            if not identifiers:
+                raw_fallback = acct_data.get(
+                    "resList", acct_data.get("resAccountList", [])
+                )
+                for acct in raw_fallback:
+                    acct_no = acct.get("resAccount", acct.get("resAccountNo", ""))
+                    if acct_no:
+                        identifiers.append(acct_no)
+
+            if identifiers:
+                await db.flush()
+                _log.getLogger(__name__).info(
+                    f"BK re-fetch found {len(identifiers)} accounts"
+                )
+        except Exception as e:
+            _log.getLogger(__name__).warning(f"BK account-list re-fetch failed: {e}")
 
     return conn, identifiers
 

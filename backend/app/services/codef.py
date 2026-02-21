@@ -627,8 +627,9 @@ class CodefClient:
             "orderBy": order_by,
             "inquiryType": inquiry_type,
         }
+        # 공식 Codef Python 샘플: 파라미터명은 accountPass (accountPassword 아님)
         if encrypted_acct_pw:
-            body["accountPassword"] = encrypted_acct_pw
+            body["accountPass"] = encrypted_acct_pw
         result = await self._api_request("/v1/kr/bank/p/account/transaction-list", body)
         return result.get("data", {})
 
@@ -655,6 +656,14 @@ class CodefClient:
             )
 
         transactions: list[dict] = []
+
+        if not accounts:
+            logger.warning(
+                f"Bank scrape: no accounts to scrape (org={organization}). "
+                "계좌 목록 파싱 실패 가능성 — register-bank 로그를 확인하세요."
+            )
+            return transactions
+
         for account in accounts:
             try:
                 data = await self.get_bank_transaction_list(
@@ -666,12 +675,21 @@ class CodefClient:
                     order_by="1",
                     account_password=account_password,
                 )
+                logger.info(
+                    f"Bank transaction-list response keys: "
+                    f"{list(data.keys()) if isinstance(data, dict) else type(data)}"
+                )
                 raw_list = data.get("resTrHistoryList", data.get("resList", []))
+                logger.info(
+                    f"Bank transaction-list: {len(raw_list)} raw items "
+                    f"for account ***{account[-4:]}"
+                )
                 for item in raw_list:
-                    transactions.append(self._normalize_bank_transaction(item, account))
+                    normalized = self._normalize_bank_transaction(item, account)
+                    transactions.append(normalized)
             except Exception as e:
                 logger.warning(
-                    f"Bank transaction-list failed for account {account[-4:]}: {e}"
+                    f"Bank transaction-list failed for account ***{account[-4:]}: {e}"
                 )
 
         logger.info(
@@ -683,18 +701,23 @@ class CodefClient:
 
     @staticmethod
     def _normalize_bank_transaction(item: dict, account: str) -> dict:
+        desc1 = item.get("resAccountDesc1", "")
+        desc2 = item.get("resAccountDesc2", "")
+        desc3 = item.get("resAccountDesc3", "")
+        desc4 = item.get("resAccountDesc4", "")
+        merchant = desc3 or desc2 or desc1 or desc4
+
+        out_amount = item.get("resAccountOut", "0")
+        in_amount = item.get("resAccountIn", "0")
+        is_withdrawal = int(out_amount or "0") > 0
+        amount = out_amount if is_withdrawal else in_amount
+
         return {
             "date": item.get("resAccountTrDate", item.get("resDate", "")),
             "time": item.get("resAccountTrTime", item.get("resTime", "")),
-            "merchant": item.get(
-                "resAccountDesc3",
-                item.get("resAccountDesc2", item.get("resAccountDesc1", "")),
-            ),
-            "amount": item.get(
-                "resAccountOut",
-                item.get("resAccountIn", item.get("resAmount", "0")),
-            ),
-            "status": item.get("resAccountType", "출금"),
+            "merchant": merchant,
+            "amount": amount,
+            "status": "출금" if is_withdrawal else "입금",
             "card_name": "",
             "card_no": account,
             "category": "",

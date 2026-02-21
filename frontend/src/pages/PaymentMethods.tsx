@@ -168,10 +168,12 @@ export default function PaymentMethods() {
             <CardContent className="p-5">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
-                  <CreditCard className="h-5 w-5 text-primary flex-shrink-0" />
+                   <CreditCard className="h-5 w-5 text-primary flex-shrink-0" />
                   <div>
                     <h3 className="font-semibold">{m.name}</h3>
-                    <p className="text-xs text-muted-foreground">Codef 연동</p>
+                    <p className="text-xs text-muted-foreground">
+                      {m.card_last_four ? `**** ${m.card_last_four}` : "Codef 연동"}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1">

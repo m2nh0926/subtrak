@@ -473,6 +473,7 @@ class CodefClient:
         connected_id: str,
         organization: str,
         months_back: int = 6,
+        card_nos: list[str] | None = None,
     ) -> list[dict]:
         """Fetch transaction history for the last N months. Returns normalized list."""
         end_date = datetime.now().strftime("%Y%m%d")
@@ -480,69 +481,80 @@ class CodefClient:
             "%Y%m%d"
         )
 
-        # 보유카드 목록을 먼저 조회하여 카드번호 확보 (CF-12401 방지)
-        card_numbers: list[str] = []
-        try:
-            card_list_data = await self.get_card_list(
-                connected_id=connected_id,
-                organization=organization,
-            )
-            raw_cards = card_list_data.get(
-                "resList", card_list_data.get("resCardList", [])
-            )
-            for card in raw_cards:
-                card_num = card.get("resCardNo", card.get("resCardNumber", ""))
-                if card_num:
-                    card_numbers.append(card_num)
-            logger.info(
-                f"Codef card-list returned {len(card_numbers)} cards: {card_numbers}"
-            )
-        except Exception as e:
-            logger.warning(f"Codef card-list failed ({e}), trying without cardNo")
+        # DB에서 카드번호가 안 넘어오면 card-list API로 시도
+        if not card_nos:
+            card_nos = []
+            try:
+                card_list_data = await self.get_card_list(
+                    connected_id=connected_id,
+                    organization=organization,
+                )
+                raw_cards = card_list_data.get(
+                    "resList", card_list_data.get("resCardList", [])
+                )
+                for card in raw_cards:
+                    found = card.get("resCardNo", card.get("resCardNumber", ""))
+                    if found:
+                        card_nos.append(found)
+                logger.info(f"Codef card-list fallback: {len(card_nos)} cards found")
+            except Exception as e:
+                logger.warning(f"Codef card-list fallback failed: {e}")
 
-        # 카드번호가 있으면 카드별로 조회, 없으면 빈 값으로 한 번 시도
-        if not card_numbers:
-            card_numbers = [""]
+        if not card_nos:
+            card_nos = [""]
 
         transactions: list[dict] = []
-        for card_no in card_numbers:
-            data = await self.get_card_approval_list(
-                connected_id=connected_id,
-                organization=organization,
-                start_date=start_date,
-                end_date=end_date,
-                order_by="1",
-                card_no=card_no,
+        for card_no in card_nos:
+            logger.info(
+                f"Codef scrape: org={organization}, cardNo={'****' + card_no[-4:] if card_no else '(empty)'}"
             )
-
-            raw_list = data.get("resList", data.get("resApprovalList", []))
-            for item in raw_list:
-                transactions.append(
-                    {
-                        "date": item.get(
-                            "resUsedDate", item.get("resApprovalDate", "")
-                        ),
-                        "time": item.get(
-                            "resUsedTime", item.get("resApprovalTime", "")
-                        ),
-                        "merchant": item.get(
-                            "resMemberStoreName",
-                            item.get("resStoreName", item.get("resMerchantName", "")),
-                        ),
-                        "amount": item.get(
-                            "resUsedAmount",
-                            item.get("resApprovalAmount", item.get("resAmount", "0")),
-                        ),
-                        "status": item.get("resApprovalStatus", "승인"),
-                        "card_name": item.get("resCardName", ""),
-                        "card_no": item.get("resCardNo", item.get("resCardNumber", "")),
-                        "category": item.get("resCategory", ""),
-                        "raw": item,
-                    }
+            try:
+                data = await self.get_card_approval_list(
+                    connected_id=connected_id,
+                    organization=organization,
+                    start_date=start_date,
+                    end_date=end_date,
+                    order_by="1",
+                    card_no=card_no,
+                )
+                raw_list = data.get("resList", data.get("resApprovalList", []))
+                for item in raw_list:
+                    transactions.append(
+                        {
+                            "date": item.get(
+                                "resUsedDate", item.get("resApprovalDate", "")
+                            ),
+                            "time": item.get(
+                                "resUsedTime", item.get("resApprovalTime", "")
+                            ),
+                            "merchant": item.get(
+                                "resMemberStoreName",
+                                item.get(
+                                    "resStoreName", item.get("resMerchantName", "")
+                                ),
+                            ),
+                            "amount": item.get(
+                                "resUsedAmount",
+                                item.get(
+                                    "resApprovalAmount", item.get("resAmount", "0")
+                                ),
+                            ),
+                            "status": item.get("resApprovalStatus", "승인"),
+                            "card_name": item.get("resCardName", ""),
+                            "card_no": item.get(
+                                "resCardNo", item.get("resCardNumber", "")
+                            ),
+                            "category": item.get("resCategory", ""),
+                            "raw": item,
+                        }
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Codef approval-list failed for card {card_no[-4:] if card_no else '?'}: {e}"
                 )
 
         logger.info(
-            f"Codef scrape total: {len(transactions)} transactions from {len(card_numbers)} card(s)"
+            f"Codef scrape total: {len(transactions)} transactions from {len(card_nos)} card(s)"
         )
         return transactions
 

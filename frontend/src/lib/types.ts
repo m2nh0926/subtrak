@@ -10,6 +10,7 @@ export interface PaymentMethod {
   id: number;
   name: string;
   card_last_four: string | null;
+  card_no: string | null;
   card_type: string;
   expiry_date: string | null;
   is_active: boolean;

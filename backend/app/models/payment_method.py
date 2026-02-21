@@ -15,6 +15,7 @@ class PaymentMethod(Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     card_last_four: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    card_no: Mapped[str | None] = mapped_column(String(30), nullable=True)
     card_type: Mapped[str] = mapped_column(String(20), default="credit")
     expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

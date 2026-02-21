@@ -60,6 +60,8 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE bank_connections ADD COLUMN IF NOT EXISTS organization_code VARCHAR(10)",
             "ALTER TABLE bank_connections ADD COLUMN IF NOT EXISTS connected_id VARCHAR(100)",
             "ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS bank_connection_id INTEGER REFERENCES bank_connections(id) ON DELETE SET NULL",
+            "ALTER TABLE bank_connections ADD COLUMN IF NOT EXISTS card_no VARCHAR(30)",
+            "ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS card_no VARCHAR(30)",
         ]
         for sql in migrations:
             try:
@@ -90,6 +92,7 @@ async def lifespan(app: FastAPI):
                     pm = PaymentMethod(
                         user_id=bc.user_id,
                         name=bc.institution_name,
+                        card_no=bc.card_no or "",
                         card_type="credit",
                         is_active=True,
                         bank_connection_id=bc.id,

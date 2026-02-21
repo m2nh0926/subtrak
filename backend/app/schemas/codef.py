@@ -79,9 +79,24 @@ class CodefDetectResponse(BaseModel):
     total_transactions_analyzed: int
 
 
-class CodefStatusResponse(BaseModel):
-    """Codef API status."""
+class CodefRegisterBankRequest(BaseModel):
+    organization_code: str
+    login_id: str
+    login_password: str
+    birthday: str = ""
+    account_password: str = ""
 
+
+class CodefRegisterBankResponse(BaseModel):
+    connected_id: str
+    bank_connection_id: int
+    organization_code: str
+    organization_name: str
+    accounts_found: int = 0
+    message: str = "은행 등록 완료"
+
+
+class CodefStatusResponse(BaseModel):
     configured: bool
     demo_mode: bool
     base_url: str

@@ -7,6 +7,7 @@ import type {
   Organization, BankConnection, CalendarMonth, ImportResult, LogoSearchResult,
   AdminDashboard, SubscriptionPreset,
   CodefCardOrg, CodefRegisterCardRequest, CodefRegisterCardResponse,
+  CodefRegisterBankRequest, CodefRegisterBankResponse,
   CodefScrapeResponse, CodefDetectResponse, CodefImportResponse, CodefStatus,
 } from "./types";
 
@@ -350,6 +351,21 @@ export function useCodefCardCompanies() {
   return useQuery<CodefCardOrg[]>({
     queryKey: ["codefCardCompanies"],
     queryFn: () => api.get("/codef/card-companies").then((r) => r.data),
+  });
+}
+
+export function useCodefBankCompanies() {
+  return useQuery<CodefCardOrg[]>({
+    queryKey: ["codefBankCompanies"],
+    queryFn: () => api.get("/codef/bank-companies").then((r) => r.data),
+  });
+}
+
+export function useCodefRegisterBank() {
+  const qc = useQueryClient();
+  return useMutation<CodefRegisterBankResponse, Error, CodefRegisterBankRequest>({
+    mutationFn: (data) => api.post("/codef/register-bank", data).then((r) => r.data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["bankConnections"] }); qc.invalidateQueries({ queryKey: ["paymentMethods"] }); },
   });
 }
 

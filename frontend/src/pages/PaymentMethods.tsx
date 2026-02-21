@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, CreditCard, Trash2, Search, Download, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
+import { Plus, CreditCard, Landmark, Trash2, Search, Download, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,14 +12,16 @@ import {
   useDeletePaymentMethod,
   useCodefStatus,
   useCodefCardCompanies,
+  useCodefBankCompanies,
   useCodefRegisterCard,
+  useCodefRegisterBank,
   useCodefDetect,
   useCodefImport,
   useCodefDeleteConnection,
 } from "@/lib/hooks";
 import type { DetectedSubscription } from "@/lib/types";
 
-const typeLabel: Record<string, string> = { credit: "신용", debit: "체크", bank_transfer: "이체" };
+const typeLabel: Record<string, string> = { credit: "신용", debit: "체크", bank_transfer: "계좌" };
 const statusLabel: Record<string, string> = { connected: "연결됨", disconnected: "연결 해제", error: "오류" };
 const billingCycleLabel: Record<string, string> = { monthly: "월", yearly: "년", weekly: "주" };
 
@@ -27,22 +29,27 @@ export default function PaymentMethods() {
   const { data: methods, isLoading } = usePaymentMethods();
   const { data: codefStatus } = useCodefStatus();
   const { data: cardCompanies } = useCodefCardCompanies();
+  const { data: bankCompanies } = useCodefBankCompanies();
   const registerCard = useCodefRegisterCard();
+  const registerBank = useCodefRegisterBank();
   const detectSubs = useCodefDetect();
   const importSubs = useCodefImport();
   const deleteCodefConn = useCodefDeleteConnection();
   const deletePaymentMethod = useDeletePaymentMethod();
 
   const [showCodefRegister, setShowCodefRegister] = useState(false);
+  const [registerTab, setRegisterTab] = useState<"card" | "bank">("card");
   const [selectedOrg, setSelectedOrg] = useState("");
   const [loginId, setLoginId] = useState("");
   const [loginPw, setLoginPw] = useState("");
   const [birthday, setBirthday] = useState("");
   const [cardNo, setCardNo] = useState("");
   const [cardPassword, setCardPassword] = useState("");
+  const [accountPassword, setAccountPassword] = useState("");
   const [registerError, setRegisterError] = useState("");
 
-  const selectedOrgConfig = cardCompanies?.find((c) => c.code === selectedOrg);
+  const orgList = registerTab === "card" ? cardCompanies : bankCompanies;
+  const selectedOrgConfig = orgList?.find((c) => c.code === selectedOrg);
   const requiredFields = selectedOrgConfig?.required_fields ?? [];
   const optionalFields = selectedOrgConfig?.optional_fields ?? [];
   const allFields = [...requiredFields, ...optionalFields];
@@ -56,25 +63,42 @@ export default function PaymentMethods() {
 
   const isCodefConfigured = codefStatus?.configured ?? false;
 
+  const resetRegisterForm = () => {
+    setSelectedOrg(""); setLoginId(""); setLoginPw(""); setBirthday("");
+    setCardNo(""); setCardPassword(""); setAccountPassword(""); setRegisterError("");
+  };
+
   const handleCodefRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegisterError("");
     try {
-      await registerCard.mutateAsync({
-        organization_code: selectedOrg,
-        login_id: loginId,
-        login_password: loginPw,
-        birthday: birthday || undefined,
-        card_no: cardNo || undefined,
-        card_password: cardPassword || undefined,
-      });
-      setSelectedOrg(""); setLoginId(""); setLoginPw(""); setBirthday(""); setCardNo(""); setCardPassword("");
+      if (registerTab === "bank") {
+        await registerBank.mutateAsync({
+          organization_code: selectedOrg,
+          login_id: loginId,
+          login_password: loginPw,
+          birthday: birthday || undefined,
+          account_password: accountPassword || undefined,
+        });
+      } else {
+        await registerCard.mutateAsync({
+          organization_code: selectedOrg,
+          login_id: loginId,
+          login_password: loginPw,
+          birthday: birthday || undefined,
+          card_no: cardNo || undefined,
+          card_password: cardPassword || undefined,
+        });
+      }
+      resetRegisterForm();
       setShowCodefRegister(false);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string } } };
-      setRegisterError(axiosErr?.response?.data?.detail || "카드 등록에 실패했습니다");
+      setRegisterError(axiosErr?.response?.data?.detail || "등록에 실패했습니다");
     }
   };
+
+  const isRegisterPending = registerTab === "bank" ? registerBank.isPending : registerCard.isPending;
 
   const handleDetect = async (connId: number) => {
     setDetectingConnId(connId);
@@ -118,8 +142,8 @@ export default function PaymentMethods() {
         <h2 className="text-2xl font-bold">결제수단</h2>
         <div className="flex gap-2">
           {isCodefConfigured && (
-            <Button onClick={() => setShowCodefRegister(true)}>
-              <CreditCard className="mr-2 h-4 w-4" />Codef 카드 등록
+            <Button onClick={() => { resetRegisterForm(); setShowCodefRegister(true); }}>
+              <CreditCard className="mr-2 h-4 w-4" />Codef 연동
             </Button>
           )}
           <Link to="/cards/new">
@@ -136,7 +160,7 @@ export default function PaymentMethods() {
               <div>
                 <p className="text-sm font-medium">Codef API 연동 활성화</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  카드사 로그인 정보로 카드를 등록하면 구독 내역을 자동으로 불러올 수 있습니다.
+                  카드사/은행 로그인 정보로 결제수단을 등록하면 구독 내역을 자동으로 불러올 수 있습니다.
                   {codefStatus?.demo_mode && " (데모 모드)"}
                 </p>
               </div>
@@ -170,7 +194,10 @@ export default function PaymentMethods() {
             <CardContent className="p-5">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
-                   <CreditCard className="h-5 w-5 text-primary flex-shrink-0" />
+                  {m.card_type === "bank_transfer"
+                    ? <Landmark className="h-5 w-5 text-primary flex-shrink-0" />
+                    : <CreditCard className="h-5 w-5 text-primary flex-shrink-0" />
+                  }
                   <div>
                     <h3 className="font-semibold">{m.name}</h3>
                     <p className="text-xs text-muted-foreground">
@@ -245,38 +272,61 @@ export default function PaymentMethods() {
       <Dialog open={showCodefRegister} onOpenChange={setShowCodefRegister}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Codef 카드 등록</DialogTitle>
-            <DialogDescription>카드사 로그인 정보로 카드를 등록합니다.</DialogDescription>
+            <DialogTitle>Codef 연동</DialogTitle>
+            <DialogDescription>카드사 또는 은행 로그인 정보로 결제수단을 등록합니다.</DialogDescription>
           </DialogHeader>
+
+          <div className="flex border-b mb-4">
+            <button
+              type="button"
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                registerTab === "card" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => { setRegisterTab("card"); setSelectedOrg(""); }}
+            >
+              <CreditCard className="h-4 w-4" />카드사
+            </button>
+            <button
+              type="button"
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                registerTab === "bank" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => { setRegisterTab("bank"); setSelectedOrg(""); }}
+            >
+              <Landmark className="h-4 w-4" />은행
+            </button>
+          </div>
+
           <form onSubmit={handleCodefRegister} className="space-y-4">
             <div>
-              <label className="text-sm font-medium">카드사 선택</label>
+              <label className="text-sm font-medium">{registerTab === "card" ? "카드사" : "은행"} 선택</label>
               <select
                 className="w-full h-10 rounded-md border border-input px-3 text-sm"
                 value={selectedOrg}
                 onChange={(e) => setSelectedOrg(e.target.value)}
                 required
               >
-                <option value="">카드사를 선택하세요</option>
-                {cardCompanies?.map((c) => (
+                <option value="">{registerTab === "card" ? "카드사를 선택하세요" : "은행을 선택하세요"}</option>
+                {orgList?.map((c) => (
                   <option key={c.code} value={c.code}>{c.name}</option>
                 ))}
               </select>
             </div>
             {orgNotes && (
               <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 p-3 rounded-md">
-                ⚠ {orgNotes}
+                {orgNotes}
               </div>
             )}
             <div>
-              <label className="text-sm font-medium">카드사 로그인 ID</label>
-              <Input value={loginId} onChange={(e) => setLoginId(e.target.value)} placeholder="카드사 홈페이지 아이디" required />
+              <label className="text-sm font-medium">{registerTab === "card" ? "카드사" : "은행"} 로그인 ID</label>
+              <Input value={loginId} onChange={(e) => setLoginId(e.target.value)} placeholder={`${registerTab === "card" ? "카드사" : "은행"} 홈페이지 아이디`} required />
             </div>
             <div>
-              <label className="text-sm font-medium">카드사 로그인 비밀번호</label>
-              <Input type="password" value={loginPw} onChange={(e) => setLoginPw(e.target.value)} placeholder="카드사 홈페이지 비밀번호" required />
+              <label className="text-sm font-medium">{registerTab === "card" ? "카드사" : "은행"} 로그인 비밀번호</label>
+              <Input type="password" value={loginPw} onChange={(e) => setLoginPw(e.target.value)} placeholder={`${registerTab === "card" ? "카드사" : "은행"} 홈페이지 비밀번호`} required />
             </div>
-            {allFields.includes("cardNo") && (
+
+            {registerTab === "card" && allFields.includes("cardNo") && (
               <div>
                 <label className="text-sm font-medium">
                   카드번호{requiredFields.includes("cardNo") && <span className="text-red-500 ml-1">*</span>}
@@ -289,7 +339,7 @@ export default function PaymentMethods() {
                 />
               </div>
             )}
-            {allFields.includes("cardPassword") && (
+            {registerTab === "card" && allFields.includes("cardPassword") && (
               <div>
                 <label className="text-sm font-medium">
                   카드 비밀번호{requiredFields.includes("cardPassword") && <span className="text-red-500 ml-1">*</span>}
@@ -303,6 +353,19 @@ export default function PaymentMethods() {
                 />
               </div>
             )}
+
+            {registerTab === "bank" && (
+              <div>
+                <label className="text-sm font-medium">계좌 비밀번호 (선택)</label>
+                <Input
+                  type="password"
+                  value={accountPassword}
+                  onChange={(e) => setAccountPassword(e.target.value)}
+                  placeholder="거래내역 조회 시 필요 (일부 은행)"
+                />
+              </div>
+            )}
+
             <div>
               <label className="text-sm font-medium">
                 생년월일{requiredFields.includes("birthDate") ? <span className="text-red-500 ml-1">*</span> : " (선택)"}
@@ -318,9 +381,9 @@ export default function PaymentMethods() {
               <div className="text-sm text-red-500 bg-red-50 p-3 rounded-md">{registerError}</div>
             )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => { setShowCodefRegister(false); setRegisterError(""); setCardNo(""); setCardPassword(""); }}>취소</Button>
-              <Button type="submit" disabled={registerCard.isPending}>
-                {registerCard.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button type="button" variant="outline" onClick={() => { setShowCodefRegister(false); resetRegisterForm(); }}>취소</Button>
+              <Button type="submit" disabled={isRegisterPending}>
+                {isRegisterPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 등록
               </Button>
             </DialogFooter>

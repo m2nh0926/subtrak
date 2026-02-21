@@ -25,6 +25,8 @@ from app.models.user import User
 from app.schemas.codef import (
     CodefCardOrg,
     CodefDetectResponse,
+    CodefRegisterBankRequest,
+    CodefRegisterBankResponse,
     CodefRegisterCardRequest,
     CodefRegisterCardResponse,
     CodefScrapeRequest,
@@ -34,7 +36,13 @@ from app.schemas.codef import (
     DetectedSubscription,
 )
 from app.services.auth import get_current_user
-from app.services.codef import CARD_FIELD_CONFIG, CARD_ORGS, codef_client
+from app.services.codef import (
+    BANK_FIELD_CONFIG,
+    BANK_ORGS,
+    CARD_FIELD_CONFIG,
+    CARD_ORGS,
+    codef_client,
+)
 
 router = APIRouter(prefix="/codef", tags=["codef"])
 
@@ -65,6 +73,154 @@ async def list_card_companies():
             )
         )
     return result
+
+
+@router.get("/bank-companies", response_model=list[CodefCardOrg])
+async def list_bank_companies():
+    result = []
+    for code, name in BANK_ORGS.items():
+        config = BANK_FIELD_CONFIG.get(code, {})
+        result.append(
+            CodefCardOrg(
+                code=code,
+                name=name,
+                required_fields=config.get("required", ["id", "password"]),
+                optional_fields=config.get("optional", ["birthDate"]),
+                notes=config.get("notes", ""),
+            )
+        )
+    return result
+
+
+@router.post("/register-bank", response_model=CodefRegisterBankResponse)
+async def register_bank(
+    data: CodefRegisterBankRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not codef_client.is_configured:
+        raise HTTPException(status_code=503, detail="Codef API가 설정되지 않았습니다")
+
+    org_name = BANK_ORGS.get(data.organization_code)
+    if not org_name:
+        raise HTTPException(status_code=400, detail="지원하지 않는 은행 코드입니다")
+
+    existing = await db.execute(
+        select(BankConnection).where(
+            BankConnection.user_id == current_user.id,
+            BankConnection.organization_code == data.organization_code,
+            BankConnection.provider == "codef",
+            BankConnection.business_type == "BK",
+            BankConnection.status == "connected",
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=409, detail=f"{org_name}은(는) 이미 등록되어 있습니다"
+        )
+
+    existing_conn = await db.execute(
+        select(BankConnection).where(
+            BankConnection.user_id == current_user.id,
+            BankConnection.provider == "codef",
+            BankConnection.connected_id.isnot(None),
+        )
+    )
+    existing_record = existing_conn.scalar_one_or_none()
+    existing_connected_id = existing_record.connected_id if existing_record else None
+
+    try:
+        connected_id = await codef_client.register_and_get_connected_id(
+            organization=data.organization_code,
+            login_id=data.login_id,
+            login_pw=data.login_password,
+            birthday=data.birthday,
+            business_type="BK",
+            existing_connected_id=existing_connected_id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    conn = BankConnection(
+        user_id=current_user.id,
+        provider="codef",
+        institution_name=org_name,
+        organization_code=data.organization_code,
+        connected_id=connected_id,
+        business_type="BK",
+        account_password=data.account_password or "",
+        status="connected",
+    )
+    db.add(conn)
+    await db.flush()
+    await db.refresh(conn)
+
+    discovered_accounts: list[dict[str, str]] = []
+    try:
+        acct_data = await codef_client.get_bank_account_list(
+            connected_id=connected_id,
+            organization=data.organization_code,
+        )
+        raw_accounts = acct_data.get("resList", acct_data.get("resAccountList", []))
+        for acct in raw_accounts:
+            acct_no = acct.get("resAccount", acct.get("resAccountNo", ""))
+            acct_name = acct.get("resAccountName", acct.get("resAccountNickName", ""))
+            if acct_no:
+                discovered_accounts.append(
+                    {"account_no": acct_no, "account_name": acct_name}
+                )
+    except Exception:
+        pass
+
+    if discovered_accounts:
+        for acct_info in discovered_accounts:
+            acct_no = acct_info["account_no"]
+            existing_pm = await db.execute(
+                select(PaymentMethod).where(
+                    PaymentMethod.user_id == current_user.id,
+                    PaymentMethod.bank_connection_id == conn.id,
+                    PaymentMethod.card_no == acct_no,
+                )
+            )
+            if not existing_pm.scalar_one_or_none():
+                display_name = acct_info["account_name"] or org_name
+                last_four = acct_no[-4:] if len(acct_no) >= 4 else acct_no
+                pm = PaymentMethod(
+                    user_id=current_user.id,
+                    name=display_name,
+                    card_no=acct_no,
+                    card_last_four=last_four,
+                    card_type="bank_transfer",
+                    is_active=True,
+                    bank_connection_id=conn.id,
+                )
+                db.add(pm)
+    else:
+        existing_pm = await db.execute(
+            select(PaymentMethod).where(
+                PaymentMethod.user_id == current_user.id,
+                PaymentMethod.bank_connection_id == conn.id,
+            )
+        )
+        if not existing_pm.scalar_one_or_none():
+            pm = PaymentMethod(
+                user_id=current_user.id,
+                name=org_name,
+                card_type="bank_transfer",
+                is_active=True,
+                bank_connection_id=conn.id,
+            )
+            db.add(pm)
+
+    await db.flush()
+
+    return CodefRegisterBankResponse(
+        connected_id=connected_id,
+        bank_connection_id=conn.id,
+        organization_code=data.organization_code,
+        organization_name=org_name,
+        accounts_found=len(discovered_accounts),
+    )
 
 
 @router.post("/register-card", response_model=CodefRegisterCardResponse)
@@ -107,13 +263,14 @@ async def register_card(
     existing_connected_id = existing_record.connected_id if existing_record else None
 
     try:
-        connected_id = await codef_client.register_card_and_get_connected_id(
+        connected_id = await codef_client.register_and_get_connected_id(
             organization=data.organization_code,
-            card_login_id=data.login_id,
-            card_login_pw=data.login_password,
+            login_id=data.login_id,
+            login_pw=data.login_password,
             birthday=data.birthday,
             card_no=data.card_no,
             card_password=data.card_password,
+            business_type="CD",
             existing_connected_id=existing_connected_id,
         )
     except Exception as e:
@@ -125,6 +282,7 @@ async def register_card(
         institution_name=org_name,
         organization_code=data.organization_code,
         connected_id=connected_id,
+        business_type="CD",
         card_no=data.card_no or "",
         status="connected",
     )
@@ -203,10 +361,9 @@ async def register_card(
     )
 
 
-async def _get_conn_and_card_nos(
+async def _get_conn_and_identifiers(
     db: AsyncSession, bank_connection_id: int, user_id: int
 ) -> tuple["BankConnection", list[str]]:
-    """BankConnection + 해당 연결의 모든 카드번호를 조회하는 공통 헬퍼."""
     result = await db.execute(
         select(BankConnection).where(
             BankConnection.id == bank_connection_id,
@@ -216,7 +373,7 @@ async def _get_conn_and_card_nos(
     )
     conn = result.scalar_one_or_none()
     if not conn:
-        raise HTTPException(status_code=404, detail="카드 연결 정보를 찾을 수 없습니다")
+        raise HTTPException(status_code=404, detail="연결 정보를 찾을 수 없습니다")
     if not conn.connected_id or not conn.organization_code:
         raise HTTPException(status_code=400, detail="Codef 연동 정보가 없습니다")
 
@@ -227,12 +384,34 @@ async def _get_conn_and_card_nos(
             PaymentMethod.card_no != "",
         )
     )
-    card_nos = [row[0] for row in pm_result.all()]
+    identifiers = [row[0] for row in pm_result.all()]
 
-    if not card_nos and conn.card_no:
-        card_nos = [conn.card_no]
+    if not identifiers and conn.card_no:
+        identifiers = [conn.card_no]
 
-    return conn, card_nos
+    return conn, identifiers
+
+
+async def _scrape_by_conn(
+    conn: "BankConnection",
+    identifiers: list[str],
+    months_back: int,
+) -> list[dict]:
+    if conn.business_type == "BK":
+        return await codef_client.scrape_bank_transactions(
+            connected_id=conn.connected_id,
+            organization=conn.organization_code,
+            accounts=identifiers,
+            months_back=months_back,
+            account_password=conn.account_password or "",
+        )
+    else:
+        return await codef_client.scrape_transactions(
+            connected_id=conn.connected_id,
+            organization=conn.organization_code,
+            months_back=months_back,
+            card_nos=identifiers or None,
+        )
 
 
 @router.post("/scrape", response_model=CodefScrapeResponse)
@@ -244,17 +423,12 @@ async def scrape_transactions(
     if not codef_client.is_configured:
         raise HTTPException(status_code=503, detail="Codef API가 설정되지 않았습니다")
 
-    conn, card_nos = await _get_conn_and_card_nos(
+    conn, identifiers = await _get_conn_and_identifiers(
         db, data.bank_connection_id, current_user.id
     )
 
     try:
-        transactions = await codef_client.scrape_transactions(
-            connected_id=conn.connected_id,
-            organization=conn.organization_code,
-            months_back=data.months_back,
-            card_nos=card_nos or None,
-        )
+        transactions = await _scrape_by_conn(conn, identifiers, data.months_back)
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -288,17 +462,12 @@ async def detect_subscriptions(
     if not codef_client.is_configured:
         raise HTTPException(status_code=503, detail="Codef API가 설정되지 않았습니다")
 
-    conn, card_nos = await _get_conn_and_card_nos(
+    conn, identifiers = await _get_conn_and_identifiers(
         db, data.bank_connection_id, current_user.id
     )
 
     try:
-        transactions = await codef_client.scrape_transactions(
-            connected_id=conn.connected_id,
-            organization=conn.organization_code,
-            months_back=data.months_back,
-            card_nos=card_nos or None,
-        )
+        transactions = await _scrape_by_conn(conn, identifiers, data.months_back)
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -429,7 +598,6 @@ async def delete_codef_connection(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Remove a Codef card connection."""
     result = await db.execute(
         select(BankConnection).where(
             BankConnection.id == conn_id,
@@ -439,13 +607,14 @@ async def delete_codef_connection(
     )
     conn = result.scalar_one_or_none()
     if not conn:
-        raise HTTPException(status_code=404, detail="카드 연결 정보를 찾을 수 없습니다")
+        raise HTTPException(status_code=404, detail="연결 정보를 찾을 수 없습니다")
 
     if conn.connected_id and conn.organization_code:
         try:
             await codef_client.delete_account(
                 connected_id=conn.connected_id,
                 organization=conn.organization_code,
+                business_type=conn.business_type or "CD",
             )
         except Exception:
             pass

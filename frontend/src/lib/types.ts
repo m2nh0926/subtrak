@@ -220,6 +220,23 @@ export interface CodefRegisterCardRequest {
   card_password?: string;
 }
 
+export interface CodefRegisterBankRequest {
+  organization_code: string;
+  login_id: string;
+  login_password: string;
+  birthday?: string;
+  account_password?: string;
+}
+
+export interface CodefRegisterBankResponse {
+  connected_id: string;
+  bank_connection_id: number;
+  organization_code: string;
+  organization_name: string;
+  accounts_found: number;
+  message: string;
+}
+
 export interface CodefRegisterCardResponse {
   connected_id: string;
   bank_connection_id: number;

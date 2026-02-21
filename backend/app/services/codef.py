@@ -56,6 +56,57 @@ CARD_ORGS: dict[str, str] = {
 # Reverse mapping: name -> code
 CARD_ORG_BY_NAME: dict[str, str] = {v: k for k, v in CARD_ORGS.items()}
 
+# Codef 은행 조직코드 (businessType: BK)
+# 출처: https://developer.codef.io/products/bank/overview
+# 씨티은행(0027): SMS 2차 인증(CF-03002) 필요 → 웹 환경 구현 어려움으로 제외
+BANK_ORGS: dict[str, str] = {
+    "0002": "산업은행",
+    "0003": "기업은행",
+    "0004": "국민은행",
+    "0007": "수협은행",
+    "0011": "농협은행",
+    "0020": "우리은행",
+    "0023": "SC제일은행",
+    "0031": "대구은행",
+    "0032": "부산은행",
+    "0034": "광주은행",
+    "0035": "제주은행",
+    "0037": "전북은행",
+    "0039": "경남은행",
+    "0045": "새마을금고",
+    "0048": "신협",
+    "0071": "우체국",
+    "0081": "하나은행",
+    "0088": "신한은행",
+    "0089": "케이뱅크",
+}
+
+BANK_ORG_BY_NAME: dict[str, str] = {v: k for k, v in BANK_ORGS.items()}
+
+# 은행별 로그인 필드 설정
+BANK_FIELD_CONFIG: dict[str, dict] = {
+    k: {
+        "required": ["id", "password"],
+        "optional": ["birthDate"],
+        "notes": "",
+    }
+    for k in BANK_ORGS
+}
+# 은행별 특이사항 오버라이드
+BANK_FIELD_CONFIG["0011"]["notes"] = "e농협 조회계좌 등록 필요 (아이디 로그인 시)"
+BANK_FIELD_CONFIG["0003"]["notes"] = "00~03시 사이에는 최근 6개월만 조회 가능"
+
+# 은행별 최대 조회 기간 (개월 수)
+BANK_MAX_MONTHS: dict[str, int] = {
+    "0071": 3,  # 우체국: 최근 90일
+    "0020": 12,  # 우리은행
+    "0031": 12,  # 대구은행
+    "0032": 12,  # 부산은행
+    "0034": 12,  # 광주은행
+    "0035": 12,  # 제주은행
+    "0081": 12,  # 하나은행
+}
+
 CARD_FIELD_CONFIG: dict[str, dict] = {
     "0301": {
         "required": ["id", "password"],
@@ -281,11 +332,12 @@ class CodefClient:
         birthday: str = "",
         card_no: str = "",
         card_password: str = "",
+        business_type: str = "CD",
     ) -> dict:
-        """Create a new connectedId by registering card credentials."""
+        """Create a new connectedId by registering card/bank credentials."""
         account_item: dict[str, str] = {
             "countryCode": "KR",
-            "businessType": "CD",
+            "businessType": business_type,
             "clientType": client_type,
             "organization": organization,
             "loginType": login_type,
@@ -328,11 +380,12 @@ class CodefClient:
         birthday: str = "",
         card_no: str = "",
         card_password: str = "",
+        business_type: str = "CD",
     ) -> dict:
-        """Add a card to an existing connectedId."""
+        """Add a card/bank to an existing connectedId."""
         account_item: dict[str, str] = {
             "countryCode": "KR",
-            "businessType": "CD",
+            "businessType": business_type,
             "clientType": client_type,
             "organization": organization,
             "loginType": login_type,
@@ -368,14 +421,15 @@ class CodefClient:
         organization: str,
         client_type: str = "P",
         login_type: str = "1",
+        business_type: str = "CD",
     ) -> dict:
-        """Remove a card from a connectedId."""
+        """Remove a card/bank from a connectedId."""
         body = {
             "connectedId": connected_id,
             "accountList": [
                 {
                     "countryCode": "KR",
-                    "businessType": "CD",
+                    "businessType": business_type,
                     "clientType": client_type,
                     "organization": organization,
                     "loginType": login_type,
@@ -454,36 +508,39 @@ class CodefClient:
     # High-level helpers
     # ========================
 
-    async def register_card_and_get_connected_id(
+    async def register_and_get_connected_id(
         self,
         organization: str,
-        card_login_id: str,
-        card_login_pw: str,
+        login_id: str,
+        login_pw: str,
         birthday: str = "",
         card_no: str = "",
         card_password: str = "",
+        business_type: str = "CD",
         existing_connected_id: str | None = None,
     ) -> str:
-        """Register a card and return the connectedId."""
+        """Register a card/bank and return the connectedId."""
         if existing_connected_id:
             data = await self.add_account(
                 connected_id=existing_connected_id,
                 organization=organization,
-                user_id=card_login_id,
-                user_password=card_login_pw,
+                user_id=login_id,
+                user_password=login_pw,
                 birthday=birthday,
                 card_no=card_no,
                 card_password=card_password,
+                business_type=business_type,
             )
             return data.get("connectedId", existing_connected_id)
         else:
             data = await self.create_account(
                 organization=organization,
-                user_id=card_login_id,
-                user_password=card_login_pw,
+                user_id=login_id,
+                user_password=login_pw,
                 birthday=birthday,
                 card_no=card_no,
                 card_password=card_password,
+                business_type=business_type,
             )
             return data.get("connectedId", "")
 
@@ -531,6 +588,118 @@ class CodefClient:
             f"(org={organization}, period={effective_months}m)"
         )
         return transactions
+
+    async def get_bank_account_list(
+        self,
+        connected_id: str,
+        organization: str,
+    ) -> dict:
+        body = {
+            "connectedId": connected_id,
+            "organization": organization,
+        }
+        result = await self._api_request("/v1/kr/bank/p/account/account-list", body)
+        return result.get("data", {})
+
+    async def get_bank_transaction_list(
+        self,
+        connected_id: str,
+        organization: str,
+        account: str,
+        start_date: str,
+        end_date: str,
+        order_by: str = "0",
+        inquiry_type: str = "1",
+        account_password: str = "",
+    ) -> dict:
+        public_key = settings.CODEF_PUBLIC_KEY
+        encrypted_acct_pw = (
+            rsa_encrypt(account_password, public_key)
+            if (public_key and account_password)
+            else account_password
+        )
+        body: dict[str, str] = {
+            "connectedId": connected_id,
+            "organization": organization,
+            "account": account,
+            "startDate": start_date,
+            "endDate": end_date,
+            "orderBy": order_by,
+            "inquiryType": inquiry_type,
+        }
+        if encrypted_acct_pw:
+            body["accountPassword"] = encrypted_acct_pw
+        result = await self._api_request("/v1/kr/bank/p/account/transaction-list", body)
+        return result.get("data", {})
+
+    async def scrape_bank_transactions(
+        self,
+        connected_id: str,
+        organization: str,
+        accounts: list[str],
+        months_back: int = 6,
+        account_password: str = "",
+    ) -> list[dict]:
+        max_months = BANK_MAX_MONTHS.get(organization, 12)
+        effective_months = min(months_back, max_months)
+
+        end_date = datetime.now().strftime("%Y%m%d")
+        start_date = (datetime.now() - timedelta(days=effective_months * 30)).strftime(
+            "%Y%m%d"
+        )
+
+        if effective_months != months_back:
+            logger.info(
+                f"Bank scrape: org={organization} period capped "
+                f"{months_back}→{effective_months} months"
+            )
+
+        transactions: list[dict] = []
+        for account in accounts:
+            try:
+                data = await self.get_bank_transaction_list(
+                    connected_id=connected_id,
+                    organization=organization,
+                    account=account,
+                    start_date=start_date,
+                    end_date=end_date,
+                    order_by="1",
+                    account_password=account_password,
+                )
+                raw_list = data.get("resTrHistoryList", data.get("resList", []))
+                for item in raw_list:
+                    transactions.append(self._normalize_bank_transaction(item, account))
+            except Exception as e:
+                logger.warning(
+                    f"Bank transaction-list failed for account {account[-4:]}: {e}"
+                )
+
+        logger.info(
+            f"Bank scrape total: {len(transactions)} transactions "
+            f"(org={organization}, accounts={len(accounts)}, "
+            f"period={effective_months}m)"
+        )
+        return transactions
+
+    @staticmethod
+    def _normalize_bank_transaction(item: dict, account: str) -> dict:
+        return {
+            "date": item.get("resAccountTrDate", item.get("resDate", "")),
+            "time": item.get("resAccountTrTime", item.get("resTime", "")),
+            "merchant": item.get(
+                "resAccountDesc3",
+                item.get("resAccountDesc2", item.get("resAccountDesc1", "")),
+            ),
+            "amount": item.get(
+                "resAccountOut",
+                item.get("resAccountIn", item.get("resAmount", "0")),
+            ),
+            "status": item.get("resAccountType", "출금"),
+            "card_name": "",
+            "card_no": account,
+            "category": "",
+            "raw": item,
+        }
 
     @staticmethod
     def _normalize_transaction(item: dict) -> dict:

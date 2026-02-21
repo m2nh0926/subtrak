@@ -26,9 +26,15 @@ class BankConnection(Base):
     account_identifier: Mapped[str | None] = mapped_column(
         String(50), nullable=True
     )  # masked account/card number
+    business_type: Mapped[str] = mapped_column(
+        String(2), default="CD"
+    )  # CD=카드, BK=은행
     card_no: Mapped[str | None] = mapped_column(
         String(30), nullable=True
     )  # Codef API 거래조회용 카드번호
+    account_password: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )  # 은행 거래조회용 계좌비밀번호
     access_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(
         String(20), default="connected"

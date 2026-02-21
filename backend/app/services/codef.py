@@ -37,9 +37,9 @@ CODEF_PROD_URL = "https://api.codef.io"
 CODEF_TOKEN_URL = "https://oauth.codef.io/oauth/token"
 
 # Codef 카드사 조직코드 (businessType: CD)
-# 2024 기준 한국에서 실제 운영 중인 카드사만 포함
-# 씨티카드(0307): 2022년 한국 소비자금융 철수 → 제외
-# 카카오뱅크(0313): 은행이지 카드사가 아님, 체크카드는 BC카드 네트워크 → 제외
+# 출처: https://developer.codef.io/products/card/overview (2024-12-19 업데이트)
+# 씨티카드(0307): 2022년 한국 소비자금융 철수 → 사용자 요청으로 제외
+# 광주카드(0316), 수협카드(0320), 제주카드(0321): 아이디 로그인 미지원(인증서만) → 제외
 CARD_ORGS: dict[str, str] = {
     "0301": "KB국민카드",
     "0302": "현대카드",
@@ -47,16 +47,15 @@ CARD_ORGS: dict[str, str] = {
     "0304": "NH농협카드",
     "0305": "BC카드",
     "0306": "신한카드",
-    "0309": "하나카드",
+    "0309": "우리카드",  # 주의: 0312 아님 (공식 문서 확인)
     "0311": "롯데카드",
-    "0312": "우리카드",
+    "0313": "하나카드",  # 주의: 0309 아님 (공식 문서 확인)
+    "0315": "전북카드",
 }
 
 # Reverse mapping: name -> code
 CARD_ORG_BY_NAME: dict[str, str] = {v: k for k, v in CARD_ORGS.items()}
 
-# Per-card-company field config for ID/PW login
-# Based on: https://developer.codef.io/common-guide/connected-id/register
 CARD_FIELD_CONFIG: dict[str, dict] = {
     "0301": {
         "required": ["id", "password"],
@@ -66,17 +65,17 @@ CARD_FIELD_CONFIG: dict[str, dict] = {
     "0302": {
         "required": ["id", "password", "cardNo", "cardPassword"],
         "optional": ["birthDate"],
-        "notes": "cardNo(인증할 카드번호), cardPassword(비밀번호 4자리) 필수",
+        "notes": "카드번호 + 비밀번호 4자리 필수 (25.10.30~). 비밀번호 3회 오류 시 계정 잠김!",
     },
     "0303": {
         "required": ["id", "password"],
         "optional": ["birthDate"],
-        "notes": "",
+        "notes": "비밀번호 5회 오류 시 잠김",
     },
     "0304": {
         "required": ["id", "password"],
         "optional": ["birthDate"],
-        "notes": "",
+        "notes": "비밀번호 5회 오류 시 잠김",
     },
     "0305": {
         "required": ["id", "password"],
@@ -86,23 +85,37 @@ CARD_FIELD_CONFIG: dict[str, dict] = {
     "0306": {
         "required": ["id", "password"],
         "optional": ["birthDate"],
-        "notes": "",
+        "notes": "비밀번호 5회 오류 시 잠김",
     },
     "0309": {
         "required": ["id", "password"],
         "optional": ["birthDate"],
-        "notes": "",
+        "notes": "비밀번호 5회 오류 시 잠김. 제한 직전 시 주민등록번호 추가 입력 필요",
     },
     "0311": {
         "required": ["id", "password"],
         "optional": ["birthDate"],
-        "notes": "",
+        "notes": "비밀번호 5회 오류 시 잠김",
     },
-    "0312": {
+    "0313": {
         "required": ["id", "password"],
         "optional": ["birthDate"],
         "notes": "",
     },
+    "0315": {
+        "required": ["id", "password"],
+        "optional": ["birthDate"],
+        "notes": "비밀번호 5회 오류 시 잠김",
+    },
+}
+
+CARD_MAX_MONTHS: dict[str, int] = {
+    "0302": 3,
+    "0305": 9,
+    "0306": 6,
+    "0311": 6,
+    "0313": 18,
+    "0315": 48,
 }
 
 
@@ -389,32 +402,38 @@ class CodefClient:
         start_date: str,
         end_date: str,
         order_by: str = "0",
-        inquiry_type: str = "0",
+        inquiry_type: str = "1",
         card_no: str = "",
-        member_store_no: str = "",
+        card_password: str = "",
+        card_name: str = "",
+        duplicate_card_idx: str = "",
+        member_store_info_type: str = "0",
     ) -> dict:
         """Get card approval/transaction history (승인내역).
 
-        Args:
-            connected_id: Codef connected ID
-            organization: Card company code
-            start_date: YYYYMMDD format
-            end_date: YYYYMMDD format
-            order_by: "0" ascending, "1" descending
-            inquiry_type: "0" all, "1" approved, "2" cancelled
-            card_no: 조회할 카드번호 (일부 카드사 필수, CF-12401 방지)
-            member_store_no: 가맹점 번호 (선택)
+        inquiry_type: "0" = 카드별 조회 (cardName+duplicateCardIdx 필요),
+                      "1" = 전체조회 (default)
+        card_no/card_password: 현대카드·KB 인증용
+        member_store_info_type: "0" 미포함, "1" 가맹점, "2" 부가세, "3" 전체
         """
-        body = {
+        body: dict[str, str] = {
             "connectedId": connected_id,
             "organization": organization,
             "startDate": start_date,
             "endDate": end_date,
             "orderBy": order_by,
             "inquiryType": inquiry_type,
-            "cardNo": card_no,
-            "memberStoreNo": member_store_no,
+            "memberStoreInfoType": member_store_info_type,
         }
+        if card_no:
+            body["cardNo"] = card_no
+        if card_password:
+            body["cardPassword"] = card_password
+        if inquiry_type == "0":
+            if card_name:
+                body["cardName"] = card_name
+            if duplicate_card_idx:
+                body["duplicateCardIdx"] = duplicate_card_idx
         result = await self._api_request("/v1/kr/card/p/account/approval-list", body)
         return result.get("data", {})
 
@@ -476,87 +495,62 @@ class CodefClient:
         card_nos: list[str] | None = None,
     ) -> list[dict]:
         """Fetch transaction history for the last N months. Returns normalized list."""
+        max_months = CARD_MAX_MONTHS.get(organization, 12)
+        effective_months = min(months_back, max_months)
+
         end_date = datetime.now().strftime("%Y%m%d")
-        start_date = (datetime.now() - timedelta(days=months_back * 30)).strftime(
+        start_date = (datetime.now() - timedelta(days=effective_months * 30)).strftime(
             "%Y%m%d"
         )
 
-        # DB에서 카드번호가 안 넘어오면 card-list API로 시도
-        if not card_nos:
-            card_nos = []
-            try:
-                card_list_data = await self.get_card_list(
-                    connected_id=connected_id,
-                    organization=organization,
-                )
-                raw_cards = card_list_data.get(
-                    "resList", card_list_data.get("resCardList", [])
-                )
-                for card in raw_cards:
-                    found = card.get("resCardNo", card.get("resCardNumber", ""))
-                    if found:
-                        card_nos.append(found)
-                logger.info(f"Codef card-list fallback: {len(card_nos)} cards found")
-            except Exception as e:
-                logger.warning(f"Codef card-list fallback failed: {e}")
-
-        if not card_nos:
-            card_nos = [""]
+        if effective_months != months_back:
+            logger.info(
+                f"Codef scrape: org={organization} period capped "
+                f"{months_back}→{effective_months} months"
+            )
 
         transactions: list[dict] = []
-        for card_no in card_nos:
-            logger.info(
-                f"Codef scrape: org={organization}, cardNo={'****' + card_no[-4:] if card_no else '(empty)'}"
+
+        try:
+            data = await self.get_card_approval_list(
+                connected_id=connected_id,
+                organization=organization,
+                start_date=start_date,
+                end_date=end_date,
+                order_by="1",
+                inquiry_type="1",
             )
-            try:
-                data = await self.get_card_approval_list(
-                    connected_id=connected_id,
-                    organization=organization,
-                    start_date=start_date,
-                    end_date=end_date,
-                    order_by="1",
-                    card_no=card_no,
-                )
-                raw_list = data.get("resList", data.get("resApprovalList", []))
-                for item in raw_list:
-                    transactions.append(
-                        {
-                            "date": item.get(
-                                "resUsedDate", item.get("resApprovalDate", "")
-                            ),
-                            "time": item.get(
-                                "resUsedTime", item.get("resApprovalTime", "")
-                            ),
-                            "merchant": item.get(
-                                "resMemberStoreName",
-                                item.get(
-                                    "resStoreName", item.get("resMerchantName", "")
-                                ),
-                            ),
-                            "amount": item.get(
-                                "resUsedAmount",
-                                item.get(
-                                    "resApprovalAmount", item.get("resAmount", "0")
-                                ),
-                            ),
-                            "status": item.get("resApprovalStatus", "승인"),
-                            "card_name": item.get("resCardName", ""),
-                            "card_no": item.get(
-                                "resCardNo", item.get("resCardNumber", "")
-                            ),
-                            "category": item.get("resCategory", ""),
-                            "raw": item,
-                        }
-                    )
-            except Exception as e:
-                logger.warning(
-                    f"Codef approval-list failed for card {card_no[-4:] if card_no else '?'}: {e}"
-                )
+            raw_list = data.get("resList", data.get("resApprovalList", []))
+            for item in raw_list:
+                transactions.append(self._normalize_transaction(item))
+        except Exception as e:
+            logger.warning(f"Codef approval-list (전체조회) failed: {e}")
 
         logger.info(
-            f"Codef scrape total: {len(transactions)} transactions from {len(card_nos)} card(s)"
+            f"Codef scrape total: {len(transactions)} transactions "
+            f"(org={organization}, period={effective_months}m)"
         )
         return transactions
+
+    @staticmethod
+    def _normalize_transaction(item: dict) -> dict:
+        return {
+            "date": item.get("resUsedDate", item.get("resApprovalDate", "")),
+            "time": item.get("resUsedTime", item.get("resApprovalTime", "")),
+            "merchant": item.get(
+                "resMemberStoreName",
+                item.get("resStoreName", item.get("resMerchantName", "")),
+            ),
+            "amount": item.get(
+                "resUsedAmount",
+                item.get("resApprovalAmount", item.get("resAmount", "0")),
+            ),
+            "status": item.get("resApprovalStatus", "승인"),
+            "card_name": item.get("resCardName", ""),
+            "card_no": item.get("resCardNo", item.get("resCardNumber", "")),
+            "category": item.get("resCategory", ""),
+            "raw": item,
+        }
 
     def detect_subscriptions(self, transactions: list[dict]) -> list[dict]:
         """Detect recurring subscription patterns from transaction history."""

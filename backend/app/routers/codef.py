@@ -441,7 +441,6 @@ async def delete_codef_connection(
     if not conn:
         raise HTTPException(status_code=404, detail="카드 연결 정보를 찾을 수 없습니다")
 
-    # Try to delete from Codef as well
     if conn.connected_id and conn.organization_code:
         try:
             await codef_client.delete_account(
@@ -449,6 +448,14 @@ async def delete_codef_connection(
                 organization=conn.organization_code,
             )
         except Exception:
-            pass  # Best-effort Codef cleanup
+            pass
+
+    linked_pms = await db.execute(
+        select(PaymentMethod).where(
+            PaymentMethod.bank_connection_id == conn.id,
+        )
+    )
+    for pm in linked_pms.scalars().all():
+        await db.delete(pm)
 
     await db.delete(conn)

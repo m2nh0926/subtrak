@@ -390,6 +390,8 @@ class CodefClient:
         end_date: str,
         order_by: str = "0",
         inquiry_type: str = "0",
+        card_no: str = "",
+        member_store_no: str = "",
     ) -> dict:
         """Get card approval/transaction history (승인내역).
 
@@ -400,6 +402,8 @@ class CodefClient:
             end_date: YYYYMMDD format
             order_by: "0" ascending, "1" descending
             inquiry_type: "0" all, "1" approved, "2" cancelled
+            card_no: 조회할 카드번호 (일부 카드사 필수, CF-12401 방지)
+            member_store_no: 가맹점 번호 (선택)
         """
         body = {
             "connectedId": connected_id,
@@ -408,6 +412,8 @@ class CodefClient:
             "endDate": end_date,
             "orderBy": order_by,
             "inquiryType": inquiry_type,
+            "cardNo": card_no,
+            "memberStoreNo": member_store_no,
         }
         result = await self._api_request("/v1/kr/card/p/account/approval-list", body)
         return result.get("data", {})
@@ -474,37 +480,70 @@ class CodefClient:
             "%Y%m%d"
         )
 
-        data = await self.get_card_approval_list(
-            connected_id=connected_id,
-            organization=organization,
-            start_date=start_date,
-            end_date=end_date,
-            order_by="1",
-        )
+        # 보유카드 목록을 먼저 조회하여 카드번호 확보 (CF-12401 방지)
+        card_numbers: list[str] = []
+        try:
+            card_list_data = await self.get_card_list(
+                connected_id=connected_id,
+                organization=organization,
+            )
+            raw_cards = card_list_data.get(
+                "resList", card_list_data.get("resCardList", [])
+            )
+            for card in raw_cards:
+                card_num = card.get("resCardNo", card.get("resCardNumber", ""))
+                if card_num:
+                    card_numbers.append(card_num)
+            logger.info(
+                f"Codef card-list returned {len(card_numbers)} cards: {card_numbers}"
+            )
+        except Exception as e:
+            logger.warning(f"Codef card-list failed ({e}), trying without cardNo")
 
-        raw_list = data.get("resList", data.get("resApprovalList", []))
-        transactions = []
-        for item in raw_list:
-            transactions.append(
-                {
-                    "date": item.get("resUsedDate", item.get("resApprovalDate", "")),
-                    "time": item.get("resUsedTime", item.get("resApprovalTime", "")),
-                    "merchant": item.get(
-                        "resMemberStoreName",
-                        item.get("resStoreName", item.get("resMerchantName", "")),
-                    ),
-                    "amount": item.get(
-                        "resUsedAmount",
-                        item.get("resApprovalAmount", item.get("resAmount", "0")),
-                    ),
-                    "status": item.get("resApprovalStatus", "승인"),
-                    "card_name": item.get("resCardName", ""),
-                    "card_no": item.get("resCardNo", item.get("resCardNumber", "")),
-                    "category": item.get("resCategory", ""),
-                    "raw": item,
-                }
+        # 카드번호가 있으면 카드별로 조회, 없으면 빈 값으로 한 번 시도
+        if not card_numbers:
+            card_numbers = [""]
+
+        transactions: list[dict] = []
+        for card_no in card_numbers:
+            data = await self.get_card_approval_list(
+                connected_id=connected_id,
+                organization=organization,
+                start_date=start_date,
+                end_date=end_date,
+                order_by="1",
+                card_no=card_no,
             )
 
+            raw_list = data.get("resList", data.get("resApprovalList", []))
+            for item in raw_list:
+                transactions.append(
+                    {
+                        "date": item.get(
+                            "resUsedDate", item.get("resApprovalDate", "")
+                        ),
+                        "time": item.get(
+                            "resUsedTime", item.get("resApprovalTime", "")
+                        ),
+                        "merchant": item.get(
+                            "resMemberStoreName",
+                            item.get("resStoreName", item.get("resMerchantName", "")),
+                        ),
+                        "amount": item.get(
+                            "resUsedAmount",
+                            item.get("resApprovalAmount", item.get("resAmount", "0")),
+                        ),
+                        "status": item.get("resApprovalStatus", "승인"),
+                        "card_name": item.get("resCardName", ""),
+                        "card_no": item.get("resCardNo", item.get("resCardNumber", "")),
+                        "category": item.get("resCategory", ""),
+                        "raw": item,
+                    }
+                )
+
+        logger.info(
+            f"Codef scrape total: {len(transactions)} transactions from {len(card_numbers)} card(s)"
+        )
         return transactions
 
     def detect_subscriptions(self, transactions: list[dict]) -> list[dict]:

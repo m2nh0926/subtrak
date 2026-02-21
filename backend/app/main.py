@@ -61,6 +61,8 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE bank_connections ADD COLUMN IF NOT EXISTS connected_id VARCHAR(100)",
             "ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS bank_connection_id INTEGER REFERENCES bank_connections(id) ON DELETE SET NULL",
             "ALTER TABLE bank_connections ADD COLUMN IF NOT EXISTS card_no VARCHAR(30)",
+            "ALTER TABLE bank_connections ADD COLUMN IF NOT EXISTS business_type VARCHAR(2) DEFAULT 'CD'",
+            "ALTER TABLE bank_connections ADD COLUMN IF NOT EXISTS account_password VARCHAR(200)",
             "ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS card_no VARCHAR(30)",
         ]
         for sql in migrations:

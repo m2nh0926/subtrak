@@ -3,7 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useSubscription, useCreateSubscription, useUpdateSubscription, useCategories, usePaymentMethods, useLogoSearch } from "@/lib/hooks";
+import { useSubscription, useCreateSubscription, useUpdateSubscription, useCategories, usePaymentMethods, useLogoSearch, useSubscriptionPresets } from "@/lib/hooks";
+import type { SubscriptionPreset } from "@/lib/types";
 
 function useDebounce(value: string, delay: number) {
   const [debounced, setDebounced] = useState(value);
@@ -21,6 +22,7 @@ export default function SubscriptionForm() {
   const { data: existing } = useSubscription(Number(id) || 0);
   const categories = useCategories();
   const paymentMethods = usePaymentMethods();
+  const presets = useSubscriptionPresets();
   const create = useCreateSubscription();
   const update = useUpdateSubscription();
 
@@ -29,6 +31,28 @@ export default function SubscriptionForm() {
     billing_day: "", next_payment_date: "", start_date: new Date().toISOString().slice(0, 10),
     category_id: "", payment_method_id: "", cancel_url: "", cancel_method: "", notes: "", logo_url: "",
   });
+
+  const [selectedPreset, setSelectedPreset] = useState<SubscriptionPreset | null>(null);
+  const [presetSearch, setPresetSearch] = useState("");
+
+  const filteredPresets = presets.data?.filter((p) =>
+    p.name.toLowerCase().includes(presetSearch.toLowerCase())
+  ) ?? [];
+
+  const applyPreset = (preset: SubscriptionPreset, planIdx: number) => {
+    const plan = preset.plans[planIdx];
+    const matchingCategory = categories.data?.find((c) => c.name === preset.category);
+    setForm((prev) => ({
+      ...prev,
+      name: preset.name,
+      amount: String(plan.amount),
+      billing_cycle: preset.billing_cycle,
+      notes: plan.plan !== "기본" ? plan.plan : "",
+      category_id: matchingCategory ? String(matchingCategory.id) : prev.category_id,
+    }));
+    setSelectedPreset(null);
+    setPresetSearch("");
+  };
 
   const debouncedName = useDebounce(form.name, 500);
   const { data: logoResult } = useLogoSearch(debouncedName);
@@ -81,6 +105,53 @@ export default function SubscriptionForm() {
         <CardHeader><CardTitle>{isEdit ? "구독 수정" : "새 구독 추가"}</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {!isEdit && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">서비스 프리셋으로 빠른 입력</label>
+                <Input
+                  value={presetSearch}
+                  onChange={(e) => { setPresetSearch(e.target.value); setSelectedPreset(null); }}
+                  placeholder="서비스명 검색 (넷플릭스, 스포티파이...)"
+                />
+                {presetSearch && filteredPresets.length > 0 && !selectedPreset && (
+                  <div className="border rounded-md max-h-48 overflow-y-auto">
+                    {filteredPresets.map((p) => (
+                      <button
+                        key={p.name}
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center justify-between"
+                        onClick={() => setSelectedPreset(p)}
+                      >
+                        <span className="font-medium">{p.name}</span>
+                        <span className="text-xs text-muted-foreground">{p.category}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {selectedPreset && (
+                  <div className="border rounded-md p-3 bg-accent/30 space-y-2">
+                    <p className="text-sm font-medium">{selectedPreset.name} — 요금제 선택</p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedPreset.plans.map((plan, i) => (
+                        <Button
+                          key={i}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => applyPreset(selectedPreset, i)}
+                        >
+                          {plan.plan} · ₩{plan.amount.toLocaleString()}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {presetSearch && filteredPresets.length === 0 && (
+                  <p className="text-xs text-muted-foreground">일치하는 프리셋이 없습니다. 아래에 직접 입력하세요.</p>
+                )}
+              </div>
+            )}
+
             <div>
               <label className="text-sm font-medium">서비스명 *</label>
               <div className="flex gap-3 items-center">

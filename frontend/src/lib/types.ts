@@ -272,6 +272,18 @@ export interface CodefStatus {
   base_url: string;
 }
 
+export interface SubscriptionPresetPlan {
+  plan: string;
+  amount: number;
+}
+
+export interface SubscriptionPreset {
+  name: string;
+  category: string;
+  billing_cycle: string;
+  plans: SubscriptionPresetPlan[];
+}
+
 export interface CalendarEvent {
   subscription_id: number;
   subscription_name: string;

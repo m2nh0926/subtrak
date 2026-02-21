@@ -10,11 +10,20 @@ from app.models.price_history import PriceHistory
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.schemas.subscription import (
-    SubscriptionCreate, SubscriptionResponse, SubscriptionUpdate, SubscriptionWithDetails,
+    SubscriptionCreate,
+    SubscriptionResponse,
+    SubscriptionUpdate,
+    SubscriptionWithDetails,
 )
 from app.services.auth import get_current_user
+from app.services.seed import SUBSCRIPTION_PRESETS
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
+
+
+@router.get("/presets")
+async def list_presets():
+    return SUBSCRIPTION_PRESETS
 
 
 @router.get("/", response_model=list[SubscriptionWithDetails])
@@ -25,10 +34,14 @@ async def list_subscriptions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = select(Subscription).options(
-        selectinload(Subscription.category),
-        selectinload(Subscription.payment_method),
-    ).where(Subscription.user_id == current_user.id)
+    query = (
+        select(Subscription)
+        .options(
+            selectinload(Subscription.category),
+            selectinload(Subscription.payment_method),
+        )
+        .where(Subscription.user_id == current_user.id)
+    )
     if is_active is not None:
         query = query.where(Subscription.is_active == is_active)
     if category_id is not None:
@@ -44,7 +57,9 @@ async def list_subscriptions(
             category_name=s.category.name if s.category else None,
             category_color=s.category.color if s.category else None,
             payment_method_name=s.payment_method.name if s.payment_method else None,
-            payment_method_last_four=s.payment_method.card_last_four if s.payment_method else None,
+            payment_method_last_four=s.payment_method.card_last_four
+            if s.payment_method
+            else None,
         )
         for s in subs
     ]
@@ -58,7 +73,10 @@ async def get_subscription(
 ):
     result = await db.execute(
         select(Subscription)
-        .options(selectinload(Subscription.category), selectinload(Subscription.payment_method))
+        .options(
+            selectinload(Subscription.category),
+            selectinload(Subscription.payment_method),
+        )
         .where(Subscription.id == sub_id, Subscription.user_id == current_user.id)
     )
     s = result.scalar_one_or_none()
@@ -69,7 +87,9 @@ async def get_subscription(
         category_name=s.category.name if s.category else None,
         category_color=s.category.color if s.category else None,
         payment_method_name=s.payment_method.name if s.payment_method else None,
-        payment_method_last_four=s.payment_method.card_last_four if s.payment_method else None,
+        payment_method_last_four=s.payment_method.card_last_four
+        if s.payment_method
+        else None,
     )
 
 
@@ -94,7 +114,9 @@ async def update_subscription(
     current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(
-        select(Subscription).where(Subscription.id == sub_id, Subscription.user_id == current_user.id)
+        select(Subscription).where(
+            Subscription.id == sub_id, Subscription.user_id == current_user.id
+        )
     )
     sub = result.scalar_one_or_none()
     if not sub:
@@ -103,7 +125,11 @@ async def update_subscription(
     update_data = data.model_dump(exclude_unset=True)
 
     # Auto-create price history if amount changed
-    if "amount" in update_data and update_data["amount"] is not None and update_data["amount"] != sub.amount:
+    if (
+        "amount" in update_data
+        and update_data["amount"] is not None
+        and update_data["amount"] != sub.amount
+    ):
         price_record = PriceHistory(
             subscription_id=sub.id,
             old_amount=sub.amount,
@@ -127,7 +153,9 @@ async def delete_subscription(
     current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(
-        select(Subscription).where(Subscription.id == sub_id, Subscription.user_id == current_user.id)
+        select(Subscription).where(
+            Subscription.id == sub_id, Subscription.user_id == current_user.id
+        )
     )
     sub = result.scalar_one_or_none()
     if not sub:
@@ -148,7 +176,9 @@ async def cancel_subscription(
     current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(
-        select(Subscription).where(Subscription.id == sub_id, Subscription.user_id == current_user.id)
+        select(Subscription).where(
+            Subscription.id == sub_id, Subscription.user_id == current_user.id
+        )
     )
     sub = result.scalar_one_or_none()
     if not sub:
@@ -157,10 +187,15 @@ async def cancel_subscription(
     log = CancellationLog(
         subscription_id=sub.id,
         reason=body.reason,
-        savings_per_month=sub.amount if sub.billing_cycle == "monthly" else sub.amount / 12,
+        savings_per_month=sub.amount
+        if sub.billing_cycle == "monthly"
+        else sub.amount / 12,
     )
     db.add(log)
     sub.is_active = False
     sub.auto_renew = False
     await db.flush()
-    return {"message": "Subscription cancelled", "savings_per_month": float(log.savings_per_month or 0)}
+    return {
+        "message": "Subscription cancelled",
+        "savings_per_month": float(log.savings_per_month or 0),
+    }

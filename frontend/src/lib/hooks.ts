@@ -5,10 +5,18 @@ import type {
   Category, DashboardSummary, CancellationLog, SavingsSummary,
   PriceHistory, SubscriptionMember, SharingPlatform, SharedSubscription,
   Organization, BankConnection, CalendarMonth, ImportResult, LogoSearchResult,
-  AdminDashboard,
+  AdminDashboard, SubscriptionPreset,
   CodefCardOrg, CodefRegisterCardRequest, CodefRegisterCardResponse,
   CodefScrapeResponse, CodefDetectResponse, CodefImportResponse, CodefStatus,
 } from "./types";
+
+// Subscription Presets
+export function useSubscriptionPresets() {
+  return useQuery<SubscriptionPreset[]>({
+    queryKey: ["subscriptionPresets"],
+    queryFn: () => api.get("/subscriptions/presets").then((r) => r.data),
+  });
+}
 
 // Subscriptions
 export function useSubscriptions(params?: { is_active?: boolean; category_id?: number; payment_method_id?: number }) {

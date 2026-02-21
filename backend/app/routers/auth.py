@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_db
+from app.models.category import Category
 from app.models.user import User
 from app.schemas.user import (
     AdminBootstrap,
@@ -41,6 +42,10 @@ async def register(data: UserRegister, db: AsyncSession = Depends(get_db)):
     await db.flush()
     await db.refresh(user)
 
+    from app.services.seed import create_default_categories
+
+    await create_default_categories(db, user.id)
+
     return TokenResponse(
         access_token=create_access_token({"sub": str(user.id)}),
         refresh_token=create_refresh_token({"sub": str(user.id)}),
@@ -52,7 +57,9 @@ async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
     if not user or not verify_password(data.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다")
+        raise HTTPException(
+            status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다"
+        )
     if not user.is_active:
         raise HTTPException(status_code=403, detail="비활성화된 계정입니다")
 
@@ -65,14 +72,22 @@ async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(data: TokenRefresh, db: AsyncSession = Depends(get_db)):
     try:
-        payload = jwt.decode(data.refresh_token, settings.JWT_SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(
+            data.refresh_token, settings.JWT_SECRET_KEY, algorithms=["HS256"]
+        )
         if payload.get("type") != "refresh":
-            raise HTTPException(status_code=401, detail="유효하지 않은 리프레시 토큰입니다")
+            raise HTTPException(
+                status_code=401, detail="유효하지 않은 리프레시 토큰입니다"
+            )
         user_id = payload.get("sub")
         if not user_id:
-            raise HTTPException(status_code=401, detail="유효하지 않은 리프레시 토큰입니다")
+            raise HTTPException(
+                status_code=401, detail="유효하지 않은 리프레시 토큰입니다"
+            )
     except JWTError:
-        raise HTTPException(status_code=401, detail="리프레시 토큰이 만료되었거나 유효하지 않습니다")
+        raise HTTPException(
+            status_code=401, detail="리프레시 토큰이 만료되었거나 유효하지 않습니다"
+        )
 
     result = await db.execute(select(User).where(User.id == int(user_id)))
     user = result.scalar_one_or_none()

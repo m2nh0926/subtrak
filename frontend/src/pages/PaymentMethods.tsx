@@ -333,7 +333,11 @@ export default function PaymentMethods() {
 
           {detectSubs.isError && (
             <div className="text-sm text-red-500 bg-red-50 p-4 rounded-md">
-              거래 내역을 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.
+              <p className="font-medium">거래 내역을 불러오는 데 실패했습니다.</p>
+              <p className="mt-1 text-xs">
+                {(detectSubs.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+                  || "Codef 서버가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해주세요."}
+              </p>
             </div>
           )}
 

@@ -36,7 +36,10 @@ CODEF_DEV_URL = "https://development.codef.io"
 CODEF_PROD_URL = "https://api.codef.io"
 CODEF_TOKEN_URL = "https://oauth.codef.io/oauth/token"
 
-# Card company organization codes
+# Codef 카드사 조직코드 (businessType: CD)
+# 2024 기준 한국에서 실제 운영 중인 카드사만 포함
+# 씨티카드(0307): 2022년 한국 소비자금융 철수 → 제외
+# 카카오뱅크(0313): 은행이지 카드사가 아님, 체크카드는 BC카드 네트워크 → 제외
 CARD_ORGS: dict[str, str] = {
     "0301": "KB국민카드",
     "0302": "현대카드",
@@ -44,11 +47,9 @@ CARD_ORGS: dict[str, str] = {
     "0304": "NH농협카드",
     "0305": "BC카드",
     "0306": "신한카드",
-    "0307": "씨티카드",
     "0309": "하나카드",
     "0311": "롯데카드",
     "0312": "우리카드",
-    "0313": "카카오뱅크",
 }
 
 # Reverse mapping: name -> code
@@ -87,11 +88,6 @@ CARD_FIELD_CONFIG: dict[str, dict] = {
         "optional": ["birthDate"],
         "notes": "",
     },
-    "0307": {
-        "required": ["id", "password"],
-        "optional": ["birthDate"],
-        "notes": "",
-    },
     "0309": {
         "required": ["id", "password"],
         "optional": ["birthDate"],
@@ -103,11 +99,6 @@ CARD_FIELD_CONFIG: dict[str, dict] = {
         "notes": "",
     },
     "0312": {
-        "required": ["id", "password"],
-        "optional": ["birthDate"],
-        "notes": "",
-    },
-    "0313": {
         "required": ["id", "password"],
         "optional": ["birthDate"],
         "notes": "",
@@ -288,9 +279,13 @@ class CodefClient:
         }
 
         public_key = settings.CODEF_PUBLIC_KEY
-        encrypted_pw = rsa_encrypt(user_password, public_key) if public_key else user_password
+        encrypted_pw = (
+            rsa_encrypt(user_password, public_key) if public_key else user_password
+        )
         encrypted_card_pw = (
-            rsa_encrypt(card_password, public_key) if (public_key and card_password) else card_password
+            rsa_encrypt(card_password, public_key)
+            if (public_key and card_password)
+            else card_password
         )
 
         if login_type == "1":
@@ -331,9 +326,13 @@ class CodefClient:
         }
 
         public_key = settings.CODEF_PUBLIC_KEY
-        encrypted_pw = rsa_encrypt(user_password, public_key) if public_key else user_password
+        encrypted_pw = (
+            rsa_encrypt(user_password, public_key) if public_key else user_password
+        )
         encrypted_card_pw = (
-            rsa_encrypt(card_password, public_key) if (public_key and card_password) else card_password
+            rsa_encrypt(card_password, public_key)
+            if (public_key and card_password)
+            else card_password
         )
 
         if login_type == "1":
@@ -565,9 +564,7 @@ class CodefClient:
                 if is_monthly or is_yearly or is_weekly:
                     original_name = txns[0].get("merchant", _merchant_key)
                     billing_cycle = (
-                        "monthly"
-                        if is_monthly
-                        else "yearly" if is_yearly else "weekly"
+                        "monthly" if is_monthly else "yearly" if is_yearly else "weekly"
                     )
                     recent_date = max(dates)
 

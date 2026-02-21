@@ -99,6 +99,16 @@ async def lifespan(app: FastAPI):
         except Exception:
             await session.rollback()
 
+    # 카테고리가 없는 기존 유저에게 기본 카테고리 생성
+    async with async_session() as session:
+        try:
+            from app.services.seed import seed_categories_for_existing_users
+
+            await seed_categories_for_existing_users(session)
+            await session.commit()
+        except Exception:
+            await session.rollback()
+
     scheduler.add_job(run_scheduled_tasks, "cron", hour=9, minute=0)
     scheduler.start()
 

@@ -97,6 +97,15 @@ export function useUpdatePaymentMethod() {
   });
 }
 
+// 결제수단 삭제 (수동 등록 또는 고아 상태 결제수단용)
+export function useDeletePaymentMethod() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.delete(`/payment-methods/${id}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["paymentMethods"] }); qc.invalidateQueries({ queryKey: ["subscriptions"] }); },
+  });
+}
+
 export function useMigratePaymentMethod() {
   const qc = useQueryClient();
   return useMutation({

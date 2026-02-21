@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { EmptyState } from "@/components/EmptyState";
 import {
   usePaymentMethods,
+  useDeletePaymentMethod,
   useCodefStatus,
   useCodefCardCompanies,
   useCodefRegisterCard,
@@ -30,6 +31,7 @@ export default function PaymentMethods() {
   const detectSubs = useCodefDetect();
   const importSubs = useCodefImport();
   const deleteCodefConn = useCodefDeleteConnection();
+  const deletePaymentMethod = useDeletePaymentMethod();
 
   const [showCodefRegister, setShowCodefRegister] = useState(false);
   const [selectedOrg, setSelectedOrg] = useState("");
@@ -210,25 +212,32 @@ export default function PaymentMethods() {
         {manualMethods.map((m) => {
           const isExpiring = m.expiry_date && new Date(m.expiry_date) <= new Date(Date.now() + 60 * 86400000);
           return (
-            <Link key={m.id} to={`/cards/${m.id}`}>
-              <Card className={`hover:shadow-md transition-shadow cursor-pointer ${isExpiring ? "border-yellow-500" : ""}`}>
-                <CardContent className="p-5">
-                  <div className="flex items-center gap-3 mb-3">
-                    <CreditCard className="h-8 w-8 text-primary" />
+            <Card key={m.id} className={`hover:shadow-md transition-shadow ${isExpiring ? "border-yellow-500" : ""}`}>
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <Link to={`/cards/${m.id}`} className="flex items-center gap-3 cursor-pointer flex-1">
+                    <CreditCard className="h-8 w-8 text-primary flex-shrink-0" />
                     <div>
                       <h3 className="font-semibold">{m.name}</h3>
                       {m.card_last_four && <p className="text-sm text-muted-foreground">**** {m.card_last_four}</p>}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">{typeLabel[m.card_type] ?? m.card_type}</Badge>
-                    {!m.is_active && <Badge variant="secondary">비활성</Badge>}
-                    {isExpiring && <Badge variant="destructive">만료 임박</Badge>}
-                  </div>
-                  {m.expiry_date && <p className="text-xs text-muted-foreground mt-2">만료일: {m.expiry_date}</p>}
-                </CardContent>
-              </Card>
-            </Link>
+                  </Link>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { if (confirm("이 결제수단을 삭제하시겠습니까?")) deletePaymentMethod.mutate(m.id); }}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{typeLabel[m.card_type] ?? m.card_type}</Badge>
+                  {!m.is_active && <Badge variant="secondary">비활성</Badge>}
+                  {isExpiring && <Badge variant="destructive">만료 임박</Badge>}
+                </div>
+                {m.expiry_date && <p className="text-xs text-muted-foreground mt-2">만료일: {m.expiry_date}</p>}
+              </CardContent>
+            </Card>
           );
         })}
       </div>
